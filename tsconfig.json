@@ -17,7 +17,11 @@
     "types": [
       "bun"
     ],
-    "rootDir": "."
+    "rootDir": ".",
+    "paths": {
+      "sadasend": ["./src/index.ts"],
+      "sadasend/webhooks": ["./src/webhooks.ts"]
+    }
   },
   "include": [
     "src",

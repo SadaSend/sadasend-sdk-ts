@@ -29,11 +29,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sadasend/sadasend-sdk-ts.git"
+    "url": "git+https://github.com/SadaSend/sadasend-sdk-ts.git"
   },
   "homepage": "https://sadasend.com",
   "bugs": {
-    "url": "https://github.com/sadasend/sadasend-sdk-ts/issues"
+    "url": "https://github.com/SadaSend/sadasend-sdk-ts/issues"
   },
   "author": "SadaSend <support@sadasend.com>",
   "keywords": [

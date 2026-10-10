@@ -1,7 +1,7 @@
 # sadasend
 
 [![npm version](https://img.shields.io/npm/v/sadasend.svg?style=flat-square&color=0052FF)](https://www.npmjs.com/package/sadasend)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/sadasend/sadasend-sdk-ts/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/SadaSend/sadasend-sdk-ts/blob/main/LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success.svg?style=flat-square)](https://www.npmjs.com/package/sadasend)
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-strict-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/)
 [![Runtime Support](https://img.shields.io/badge/runtimes-Node%2018%2B%20%7C%20Bun%20%7C%20Deno%20%7C%20Workers%20%7C%20Edge-informational.svg?style=flat-square)](https://sadasend.com/docs/sdks/typescript)
@@ -32,6 +32,7 @@ The official TypeScript and JavaScript SDK for [SadaSend](https://sadasend.com).
 - [Native Model Context Protocol (MCP) Integration](#native-model-context-protocol-mcp-integration)
 - [Canonical Documentation & Technical References](#canonical-documentation--technical-references)
 - [Frequently Asked Questions (FAQ)](#frequently-asked-questions-faq)
+- [AI Agent Skill Integration](#ai-agent-skill-integration)
 - [License & Support](#license--support)
 
 ---
@@ -81,7 +82,7 @@ SadaSend introduces **Server-Enforced Guardrails** that no agent prompt can talk
 
 ## Installation
 
-Install via your preferred package manager:
+Install the official package from [npm](https://www.npmjs.com/package/sadasend) via your preferred package manager:
 
 ```bash
 # npm
@@ -520,9 +521,22 @@ When an API key is minted with `mode: 'approval'`, outgoing messages are held in
 
 ---
 
+## AI Agent Skill Integration
+
+This repository includes a standardized workspace skill for AI coding assistants (Cursor, Claude Code, Antigravity, CrewAI, LangChain) at [`.agents/skills/sadasend-email`](./.agents/skills/sadasend-email/SKILL.md).
+
+It guides agents to:
+- Treat `pending_approval` as an intentional human-in-the-loop sign-off state rather than a failure
+- Conduct zero-cost preflight dry runs (`dryRun: true`) before making production changes
+- Self-correct on guardrail errors using attached remediation data (`error.allowlist`, `error.records`)
+- Enforce idempotency across multi-step execution loops
+
+---
+
 ## License & Support
 
+- **npm Package:** [https://www.npmjs.com/package/sadasend](https://www.npmjs.com/package/sadasend)
+- **GitHub Repository:** [SadaSend/sadasend-sdk-ts](https://github.com/SadaSend/sadasend-sdk-ts)
 - **License:** [MIT License](./LICENSE) © [SadaSend](https://sadasend.com)
 - **General Support:** [support@sadasend.com](mailto:support@sadasend.com)
 - **Security Vulnerabilities:** [security@sadasend.com](mailto:security@sadasend.com)
-- **GitHub Repository:** [sadasend/sadasend-sdk-ts](https://github.com/sadasend/sadasend-sdk-ts)
