@@ -1,0 +1,75 @@
+{
+  "name": "sadasend",
+  "version": "0.1.0",
+  "description": "Official TypeScript/JavaScript SDK for SadaSend. Transactional email with unbypassable server-enforced guardrails for human engineers and autonomous AI agents (Claude, Cursor, MCP). Zero dependencies, native fetch & WebCrypto, automatic idempotency, and constant-time webhook verification.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./webhooks": {
+      "types": "./dist/webhooks.d.ts",
+      "default": "./dist/webhooks.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:e2e": "bun test test/e2e.test.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sadasend/sadasend-sdk-ts.git"
+  },
+  "homepage": "https://sadasend.com",
+  "bugs": {
+    "url": "https://github.com/sadasend/sadasend-sdk-ts/issues"
+  },
+  "author": "SadaSend <support@sadasend.com>",
+  "keywords": [
+    "sadasend",
+    "email",
+    "transactional-email",
+    "email-api",
+    "ai-agents",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "cursor",
+    "langchain",
+    "crewai",
+    "agentic-ai",
+    "smtp",
+    "guardrails",
+    "idempotency",
+    "zero-dependencies",
+    "resend",
+    "sendgrid",
+    "postmark",
+    "webhooks",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false,
+  "license": "MIT",
+  "funding": {
+    "type": "individual",
+    "url": "https://sadasend.com/pricing"
+  }
+}
