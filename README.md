@@ -27,6 +27,9 @@ The official TypeScript and JavaScript SDK for [SadaSend](https://sadasend.com).
   - [6. Automated & Manual Suppressions (`suppressions`)](#6-automated--manual-suppressions-suppressions)
   - [7. Account Deliverability & Telemetry (`account`)](#7-account-deliverability--telemetry-account)
   - [8. API Key Governance & Approvals Queue (`keys`)](#8-api-key-governance--approvals-queue-keys)
+  - [9. Real-Time Deliverability Verification & Shield (`tools.verify`, `verifyBeforeSend`)](#9-real-time-deliverability-verification--shield-toolsverify-verifybeforesend)
+  - [10. Standardized UTM Campaign URL Tagging (`tools.buildUtm`)](#10-standardized-utm-campaign-url-tagging-toolsbuildutm)
+  - [11. Prepaid Credit Packs & Paddle Checkout (`billing.creditsCheckout`)](#11-prepaid-credit-packs--paddle-checkout-billingcreditscheckout)
 - [Timing-Safe HMAC Webhook Verification](#timing-safe-hmac-webhook-verification)
 - [Error Handling: Discriminated Unions](#error-handling-discriminated-unions)
 - [Native Model Context Protocol (MCP) Integration](#native-model-context-protocol-mcp-integration)
@@ -123,7 +126,7 @@ console.log(result.status, result.id);
 
 *Note: The code above is an active integration test verified against a live server in CI via [`examples/ten-lines.ts`](./examples/ten-lines.ts).*
 
-For an executable walkthrough covering all 16 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
+For an executable walkthrough covering all 19 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
 
 ---
 
@@ -213,6 +216,13 @@ const res = await sadasend.emails.send({
       contentType: 'application/pdf',
     },
   ],
+  verifyBeforeSend: true, // Deliverability Shield: validates MX/syntax before send, burns 0 quota
+  marketing: true,        // Automatically injects RFC 8058 One-Click List-Unsubscribe headers
+  utm: {                  // Standardized analytics tracking
+    source: 'invoicing_system',
+    medium: 'email',
+    campaign: 'q4_statements',
+  },
   idempotencyKey: 'invoice-send-INV-2026-10',
 });
 
@@ -359,6 +369,78 @@ if (held.ok) {
 }
 ```
 
+### 9. Real-Time Deliverability Verification & Shield (`tools.verify`, `verifyBeforeSend`)
+
+Protect sender reputation and verify recipient mailbox deliverability in real time before sending without debiting account sending quota:
+
+```ts
+// 1. Standalone single recipient verification
+const verified = await sadasend.tools.verify('alex@example.com');
+if (verified.ok) {
+  console.log(`Verdict: ${verified.data.verdict}`);
+  if (verified.data.checks) {
+    console.log(`Deliverability score: ${verified.data.checks.score}/100, MX: ${verified.data.checks.mx}`);
+  }
+}
+
+// 2. High-throughput batch verification
+const batchVerified = await sadasend.tools.verifyBatch([
+  'dana@startup.io',
+  'invalid-syntax@bad',
+  'bounced@disposable.org',
+]);
+if (batchVerified.ok) {
+  console.log(`Verified ${batchVerified.data.total} addresses (${batchVerified.data.deliverable} deliverable)`);
+}
+
+// 3. Send-time deliverability shield: refuses undeliverables before queuing, debits 0 quota
+const sendResult = await sadasend.emails.send({
+  from: 'alerts@yourdomain.com',
+  to: 'newuser@example.com',
+  subject: 'Welcome to our platform',
+  text: 'Verify your account.',
+  verifyBeforeSend: true, // Server performs instant MX, disposable, and syntax verification
+  marketing: true,        // Automatically injects RFC 8058 One-Click List-Unsubscribe headers
+});
+```
+
+### 10. Standardized UTM Campaign URL Tagging (`tools.buildUtm`)
+
+Ensure zero broken tracking URLs across email marketing workflows:
+
+```ts
+const tagged = await sadasend.tools.buildUtm({
+  url: 'https://yourdomain.com/launch?ref=partner#pricing',
+  source: 'newsletter',
+  medium: 'email',
+  campaign: 'q4_launch',
+  term: 'transactional',
+  content: 'hero_cta',
+});
+
+if (tagged.ok) {
+  console.log('Normalized URL:', tagged.data.url);
+  // Preserves existing query params and hash anchor (#pricing)
+}
+```
+
+### 11. Prepaid Credit Packs & Paddle Checkout (`billing.creditsCheckout`)
+
+Initialize a one-time Paddle checkout transaction for prepaid verification or sending credit packs:
+
+```ts
+const checkout = await sadasend.billing.creditsCheckout({
+  type: 'verify',      // 'verify' | 'send'
+  pack: '25k',         // '5k' | '25k' | '100k' | '500k' for verify; '10k' | '50k' | '100k' for send
+  returnUrl: 'https://yourdomain.com/dashboard/billing',
+});
+
+if (checkout.ok) {
+  console.log('Transaction ID:', checkout.data.transactionId);
+  console.log('Paddle Checkout URL:', checkout.data.checkoutUrl);
+}
+```
+
 ---
 
 ## Timing-Safe HMAC Webhook Verification
@@ -450,10 +532,18 @@ console.log('Message ID:', result.id);
 | `AuthenticationError` | Missing, invalid, or revoked API key | No | None |
 | `InsufficientScopeError` | API key lacks required scope (`send`, `read`, `domains`) | No | `required`, `held` |
 | `InvalidFromError` | Sender address is malformed | No | None |
+| `InvalidSubjectError` | Subject contains carriage returns/control chars or is empty | No | None |
+| `InvalidDateError` | `scheduledAt` timestamp is in past or beyond 72-hour limit | No | None |
 | `DomainNotFoundError` | Sending domain is not registered on this account | No | None |
 | `DomainNotVerifiedError` | Sending domain has not completed SPF/DKIM verification | No | `records` (Table of required DNS records) |
 | `RecipientNotAllowlistedError` | Agent attempted to email an address not in allowlist | No | `allowlist`, `recipient` |
 | `RecipientSuppressedError` | Recipient previously bounced or unsubscribed | No | `reason`, `recipient` |
+| `UndeliverableRecipientError` | Deliverability Shield caught undeliverable/disposable recipient mailbox (HTTP 422) | No | `recipient` |
+| `BatchSizeExceededError` | Batch size exceeded account or tier limits (HTTP 400) | No | None |
+| `PlanTierInsufficientError` | Requested feature requires higher plan tier (HTTP 403) | No | None |
+| `AnonymousLimitExceededError` | Anonymous or unauthenticated playground quota exhausted (HTTP 429) | No | None |
+| `InvitationAlreadyPendingError` | A pending team invite already exists for this email (HTTP 409) | No | None |
+| `InvalidPlanError` | Invalid plan tier or pack parameter provided (HTTP 400) | No | None |
 | `IdempotencyKeyReusedError` | Same idempotency key passed with altered payload | No | None |
 | `IdempotencyInProgressError` | Original idempotent request is still processing | **Yes** | None |
 | `RateLimitError` | Per-key or account rate limit ceiling reached (HTTP 429) | **Yes** | `retryAfterSeconds` |

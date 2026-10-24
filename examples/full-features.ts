@@ -18,6 +18,9 @@
  * 14. Suppression list management (`suppressions.add`, `suppressions.list`)
  * 15. Human approval queue monitoring (`keys.approvals`)
  * 16. Webhook constant-time HMAC-SHA256 signature verification & event parsing
+ * 17. Real-time deliverability verification & shield (`tools.verify`, `tools.verifyBatch`)
+ * 18. Standardized UTM campaign URL tagging (`tools.buildUtm`)
+ * 19. Prepaid credit pack Paddle checkout (`billing.creditsCheckout`)
  *
  * Run this example:
  *   SADASEND_API_KEY="sada_live_sk_..." bun run examples/full-features.ts
@@ -32,6 +35,7 @@ import {
   RateLimitError,
   AuthenticationError,
   InsufficientScopeError,
+  UndeliverableRecipientError,
 } from 'sadasend';
 import { verifyWebhook, parseWebhook } from 'sadasend/webhooks';
 
@@ -197,6 +201,16 @@ const sendResult = await sadasend.emails.send({
       contentType: 'application/pdf',
     },
   ],
+  // Deliverability Shield: real-time recipient mailbox validation before queueing
+  verifyBeforeSend: true,
+  // RFC 8058 One-Click List-Unsubscribe header injection
+  marketing: true,
+  // Standardized campaign analytics tracking
+  utm: {
+    source: 'sdk_demo',
+    medium: 'email',
+    campaign: 'v011_launch',
+  },
   // Domain-specific idempotency key: guarantees exactly-once delivery across retries and restarts
   idempotencyKey: `invoice-2026-08-${Date.now()}`,
 });
@@ -211,7 +225,9 @@ if (sendResult.ok) {
   console.log(`Transactional send succeeded! ID: ${sendResult.id} (Status: ${sendResult.status})`);
 } else {
   const err = sendResult.error;
-  if (err instanceof DomainNotVerifiedError) {
+  if (err instanceof UndeliverableRecipientError) {
+    console.error(`Deliverability Shield refused bad recipient: ${err.recipient} (debits 0 quota)`);
+  } else if (err instanceof DomainNotVerifiedError) {
     console.error(`Domain not verified! Required DNS records:`, err.records);
   } else if (err instanceof DomainNotFoundError) {
     console.error(`Domain not found on account: ${err.message}`);
@@ -410,6 +426,56 @@ const parsedEvent = await parseWebhook(sampleWebhookSecret, samplePayload, signa
 if (parsedEvent) {
   console.log(`Parsed Webhook Event: type = ${parsedEvent.type}, id = ${parsedEvent.id}`);
   console.log(`Delivered to message ID: ${parsedEvent.data.messageId}`);
+}
+
+// ---------------------------------------------------------------------------
+// 17. Real-Time Deliverability Verification & Shield
+// ---------------------------------------------------------------------------
+console.log('\n--- 17. Real-Time Deliverability Verification ---');
+const verifySingle = await sadasend.tools.verify(TEST_RECIPIENT);
+if (verifySingle.ok) {
+  console.log(`Recipient ${verifySingle.data.email}: status = ${verifySingle.data.status}, verdict = ${verifySingle.data.verdict}`);
+  console.log(`  Deliverability score: ${verifySingle.data.score}/100, MX valid: ${verifySingle.data.checks.mx.valid}`);
+}
+
+const verifyBatchResult = await sadasend.tools.verifyBatch([
+  'verified-user@example.com',
+  'invalid-bad-domain@fake.test',
+]);
+if (verifyBatchResult.ok) {
+  console.log(`Batch verification: ${verifyBatchResult.data.deliverable} deliverable, ${verifyBatchResult.data.undeliverable} undeliverable out of ${verifyBatchResult.data.total}`);
+}
+
+// ---------------------------------------------------------------------------
+// 18. Standardized UTM Campaign URL Tagging
+// ---------------------------------------------------------------------------
+console.log('\n--- 18. Standardized UTM Campaign URL Builder ---');
+const utmResult = await sadasend.tools.buildUtm({
+  url: 'https://sadasend.com/docs?ref=partner#pricing',
+  source: 'product_newsletter',
+  medium: 'email',
+  campaign: 'q4_enterprise',
+  term: 'transactional_sdk',
+  content: 'hero_cta',
+});
+
+if (utmResult.ok) {
+  console.log(`Tagged URL: ${utmResult.data.tagged}`);
+  console.log(`UTM Source: ${utmResult.data.params.utm_source} | Campaign: ${utmResult.data.params.utm_campaign}`);
+}
+
+// ---------------------------------------------------------------------------
+// 19. Prepaid Credit Pack Checkout
+// ---------------------------------------------------------------------------
+console.log('\n--- 19. Prepaid Credit Pack Checkout ---');
+const checkout = await sadasend.billing.creditsCheckout({
+  type: 'verify',
+  pack: '25k',
+  returnUrl: 'https://app.sadasend.com/billing',
+});
+
+if (checkout.ok) {
+  console.log(`Initialized Paddle Checkout: ${checkout.data.checkoutUrl} (Transaction ID: ${checkout.data.transactionId})`);
 }
 
 console.log('\n=== SadaSend TypeScript SDK Demo Completed Successfully ===\n');

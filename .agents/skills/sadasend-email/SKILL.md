@@ -34,6 +34,8 @@ Unlike legacy email APIs that blindly dispatch emails or crash via exceptions, S
    Tag all client instances with `agentName` (e.g. `billing-agent`, `customer-support-bot`) so administrators can trace email velocity and logs directly back to your persona.
 5. **Always Use Idempotency Keys Across Multi-Step Workflows:**
    Pass `idempotencyKey: 'task-<id>'` to prevent accidental duplicate deliveries during retries, network glitches, or agent loop restarts.
+6. **Enable Deliverability Shield (`verifyBeforeSend: true`):**
+   Protect sender reputation by enabling real-time recipient verification at send time. Refused undeliverables debit 0 sending quota and return a typed `UndeliverableRecipientError` for proactive remediation.
 
 ---
 
@@ -113,29 +115,36 @@ import {
   DomainNotVerifiedError,
   RecipientSuppressedError,
   RateLimitError,
+  UndeliverableRecipientError,
 } from 'sadasend';
 
 if (!result.ok) {
   const err = result.error;
 
-  // 1. Recipient outside agent allowlist
-  if (err instanceof RecipientNotAllowlistedError) {
+  // 1. Deliverability Shield refusal (invalid address or MX failure)
+  if (err instanceof UndeliverableRecipientError) {
+    console.warn(`Recipient ${err.recipient} is undeliverable. Debited 0 quota. Do not retry.`);
+    // Self-correction: Query CRM for alternate address or prompt user to verify mailbox
+  }
+
+  // 2. Recipient outside agent allowlist
+  else if (err instanceof RecipientNotAllowlistedError) {
     console.warn(`Cannot reach ${err.recipient}. Key is restricted to:`, err.allowlist);
     // Self-correction: Inform user/supervisor or route to an approved internal address
   }
 
-  // 2. Domain lacks DNS verification (DKIM/SPF/DMARC)
+  // 3. Domain lacks DNS verification (DKIM/SPF/DMARC)
   else if (err instanceof DomainNotVerifiedError) {
     console.error(`Sending domain unverified. Required DNS records:`, err.records);
     // Report missing records to DevOps
   }
 
-  // 3. Recipient unsubscribed or bounced
+  // 4. Recipient unsubscribed or bounced
   else if (err instanceof RecipientSuppressedError) {
     console.warn(`Recipient suppressed (reason: ${err.reason}). Do NOT retry.`);
   }
 
-  // 4. Rate limited
+  // 5. Rate limited
   else if (err instanceof RateLimitError) {
     console.warn(`Rate limit hit. Wait ${err.retryAfterSeconds}s.`);
   }

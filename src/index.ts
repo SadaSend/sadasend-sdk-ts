@@ -7,28 +7,31 @@
  * both of which are in Node 18+, Bun, Deno, Cloudflare Workers and the browser.
  */
 
-export { SadaSend } from './client.js';
+export { SadaSend } from "./client.js";
 export type {
   AccountChecklist, AccountInfo, AccountStats, AccountVolume, AccountVolumeDay,
-  ApiKeySummary, Attachment, BatchItemResult, BatchResult, ChecklistItem,
-  CircuitBreaker, ClientOptions, DeliverabilityTool, HeldApproval,
-  Message, MessageStatus, Result, SendInput, SendResult, StaffAccess,
-  SupportTicketSummary, TeamMember, TemplateDetail, TemplateSummary,
-  WebhookDelivery, WebhookEndpoint,
-} from './client.js';
+  ApiKeySummary, Attachment, BatchItemResult, BatchResult, BatchVerificationResult,
+  ChecklistItem, CircuitBreaker, ClientOptions, CreditsCheckoutInput, CreditsCheckoutResult,
+  DeliverabilityTool, HeldApproval, Message, MessageStatus, Result, SendInput,
+  SendResult, StaffAccess, SupportTicketSummary, TeamMember, TemplateDetail,
+  TemplateSummary, VerificationCheckResult, VerificationResult,
+  UtmBuildInput, UtmBuildResult, UtmOptions, WebhookDelivery, WebhookEndpoint,
+} from "./client.js";
 
 export {
   AuthenticationError, ConnectionError, DomainNotFoundError, DomainNotVerifiedError,
   IdempotencyInProgressError, IdempotencyKeyReusedError, InsufficientScopeError,
   InvalidFromError, RateLimitError, RecipientNotAllowlistedError, RecipientSuppressedError,
   SadaSendError, ServerError, isRetryable,
-} from './errors.js';
-export type { DnsRecord } from './errors.js';
+  UndeliverableRecipientError, InvalidSubjectError, InvalidDateError, BatchSizeExceededError,
+  PlanTierInsufficientError, AnonymousLimitExceededError, InvitationAlreadyPendingError, InvalidPlanError,
+} from "./errors.js";
+export type { DnsRecord } from "./errors.js";
 
-export { DEFAULT_RETRY } from './retry.js';
-export type { RetryPolicy } from './retry.js';
+export { DEFAULT_RETRY } from "./retry.js";
+export type { RetryPolicy } from "./retry.js";
 
 export {
   DEFAULT_TOLERANCE_MS, SIGNATURE_HEADER, parseWebhook, verifyWebhook,
-} from './webhooks.js';
-export type { VerifyOptions, WebhookEvent, WebhookEventType } from './webhooks.js';
+} from "./webhooks.js";
+export type { VerifyOptions, WebhookEvent, WebhookEventType } from "./webhooks.js";

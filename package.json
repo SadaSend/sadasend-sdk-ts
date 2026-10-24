@@ -1,6 +1,6 @@
 {
   "name": "sadasend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Official TypeScript/JavaScript SDK for SadaSend. Transactional email with unbypassable server-enforced guardrails for human engineers and autonomous AI agents (Claude, Cursor, MCP). Zero dependencies, native fetch & WebCrypto, automatic idempotency, and constant-time webhook verification.",
   "type": "module",
   "main": "./dist/index.js",
@@ -18,7 +18,8 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

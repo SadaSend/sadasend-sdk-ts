@@ -23,6 +23,13 @@ const res = await sadasend.emails.send({
   headers?: { 'X-Entity-ID': 'inv_99' },
   attachments?: [{ filename: 'receipt.pdf', content: base64Data, contentType: 'application/pdf' }],
   scheduledAt?: new Date(Date.now() + 3600000), // Future delivery
+  verifyBeforeSend?: true,       // Deliverability Shield: validates MX/syntax before send
+  marketing?: true,              // RFC 8058 One-Click List-Unsubscribe headers
+  utm?: {                        // Standardized UTM campaign tags
+    source: 'agent',
+    medium: 'email',
+    campaign: 'q4_onboarding',
+  },
   dryRun?: true,                 // Zero-cost preflight validation
   idempotencyKey?: 'order-1234', // Custom domain key (auto-generated if omitted)
   channel?: 'sdk',
@@ -127,4 +134,41 @@ const approvals = await sadasend.keys.approvals();
 
 // List API keys
 const keys = await sadasend.keys.list();
+```
+
+---
+
+## 7. Deliverability Tools & Verification
+
+```ts
+// Real-time single address verification
+const verify = await sadasend.tools.verify('user@example.com');
+// verify.data: { email, verdict: 'deliverable' | 'undeliverable' | 'risky' | 'unknown', checks: { score, mx, syntax, disposable } }
+
+// Batch recipient verification
+const batchVerify = await sadasend.tools.verifyBatch(['u1@example.com', 'u2@fake.test']);
+// batchVerify.data: { total: 2, deliverable: 1, undeliverable: 1, results: [...] }
+
+// Normalized UTM URL campaign builder
+const utm = await sadasend.tools.buildUtm({
+  url: 'https://domain.com/launch#pricing',
+  source: 'newsletter',
+  medium: 'email',
+  campaign: 'q4_launch',
+});
+// utm.data: { url: 'https://domain.com/launch?utm_source=newsletter&utm_medium=email&utm_campaign=q4_launch#pricing', params: { ... } }
+```
+
+---
+
+## 8. Billing & Prepaid Credit Packs
+
+```ts
+// Initialize one-time Paddle checkout for credit packs
+const checkout = await sadasend.billing.creditsCheckout({
+  type: 'verify', // 'verify' | 'send'
+  pack: '25k',    // '5k' | '25k' | '100k' | '500k' for verify; '10k' | '50k' | '100k' for send
+  returnUrl: 'https://domain.com/dashboard/billing',
+});
+// checkout.data: { checkoutUrl: 'https://checkout.paddle.com/...', transactionId: '...', pack: '25k', credits: 25000 }
 ```

@@ -1,10 +1,16 @@
-import { SadaSend, RecipientNotAllowlistedError, RecipientSuppressedError, DomainNotVerifiedError } from 'sadasend';
+import {
+  SadaSend,
+  RecipientNotAllowlistedError,
+  RecipientSuppressedError,
+  DomainNotVerifiedError,
+  UndeliverableRecipientError,
+} from 'sadasend';
 
 /**
  * Autonomous AI Agent Execution Pattern
  * Demonstrates:
  *   1. Attribution & Client Setup
- *   2. Preflight Dry Run
+ *   2. Preflight Dry Run with Deliverability Shield
  *   3. Guardrail Interception & Self-Correction
  *   4. Handling Approval Queue ('pending_approval')
  */
@@ -17,17 +23,23 @@ export async function agentEmailWorkflow(targetRecipient: string) {
 
   console.log(`🤖 Agent analyzing email to: ${targetRecipient}...`);
 
-  // Step 1: Preflight Dry Run
+  // Step 1: Preflight Dry Run with Deliverability Shield
   const preflight = await client.emails.send({
     from: 'welcome@onboarding.sadasend.com',
     to: targetRecipient,
     subject: 'Welcome to our platform',
     text: 'Your account is now ready.',
     dryRun: true,
+    verifyBeforeSend: true,
   });
 
   if (!preflight.ok) {
     const error = preflight.error;
+
+    if (error instanceof UndeliverableRecipientError) {
+      console.warn(`⚠️ Target mailbox is undeliverable (syntax/MX issue). Debited 0 quota.`);
+      return { status: 'refused', reason: 'undeliverable_recipient', recipient: error.recipient };
+    }
 
     if (error instanceof RecipientNotAllowlistedError) {
       console.warn(`⚠️ Blocked by Agent Allowlist Guardrail!`);
@@ -59,6 +71,7 @@ export async function agentEmailWorkflow(targetRecipient: string) {
     html: '<h1>Welcome!</h1><p>Your account is ready.</p>',
     text: 'Welcome! Your account is ready.',
     tags: ['onboarding', 'agent-dispatched'],
+    verifyBeforeSend: true,
     idempotencyKey: `onboarding-${targetRecipient}-${new Date().toISOString().slice(0, 10)}`,
   });
 

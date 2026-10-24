@@ -25,6 +25,84 @@ export type Attachment = {
   contentId?: string;
 };
 
+export type UtmOptions = {
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  term?: string;
+  content?: string;
+  override_existing?: boolean;
+};
+
+export type UtmBuildInput = {
+  url: string;
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  term?: string;
+  content?: string;
+  override_existing?: boolean;
+};
+
+export type UtmBuildResult = {
+  ok: boolean;
+  original: string;
+  tagged: string;
+  params: Record<string, string>;
+};
+
+
+export type VerificationCheckResult = {
+  label: string;
+  value: string;
+  verdict: 'pass' | 'warn' | 'fail';
+  note?: string;
+};
+
+export type VerificationResult = {
+  email: string;
+  user: string;
+  domain: string;
+  status: 'deliverable' | 'undeliverable' | 'risky';
+  verdict: 'pass' | 'warn' | 'fail';
+  score: number;
+  reasons?: string[];
+  suggestion?: string | null;
+  checks: {
+    syntax: { valid: boolean; error?: string };
+    mx: { valid: boolean; records?: string[]; hasFallbackA?: boolean };
+    disposable: { isDisposable: boolean };
+    role: { isRole: boolean };
+    typo?: { hasTypo: boolean; suggestion?: string; suggestedDomain?: string };
+  };
+  rows: VerificationCheckResult[];
+  summary: string;
+};
+
+export type BatchVerificationResult = {
+  ok: boolean;
+  total: number;
+  deliverable: number;
+  undeliverable: number;
+  disposable: number;
+  role_account: number;
+  results: VerificationResult[];
+};
+
+export type CreditsCheckoutInput = {
+  pack: string;
+  type?: 'verify' | 'send';
+  returnUrl?: string;
+};
+
+export type CreditsCheckoutResult = {
+  transactionId: string;
+  checkoutUrl: string;
+  priceId: string;
+  clientToken: string;
+  environment: string;
+};
+
 export type SendInput = {
   from: string;
   to: string | string[];
@@ -58,8 +136,20 @@ export type SendInput = {
    */
   tags?: string[];
   headers?: Record<string, string>;
+  utm?: UtmOptions;
   attachments?: Attachment[];
   scheduledAt?: Date | string;
+  /**
+   * Real-time recipient deliverability verification before enqueue.
+   * Refuses undeliverable recipients with 422 UndeliverableRecipientError and debits zero quota.
+   */
+  verifyBeforeSend?: boolean;
+  verify_before_send?: boolean;
+  /**
+   * RFC 8058 One-Click List-Unsubscribe Header.
+   * Automatically injects List-Unsubscribe and List-Unsubscribe-Post headers.
+   */
+  marketing?: boolean;
   /**
    * Run every check and send nothing. The cheapest way to be sure, and the
    * same code path as a real send — a preview down a different path would be a
@@ -294,7 +384,7 @@ export type ClientOptions = {
   agentName?: string;
 };
 
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 
 /**
  * `process.env`, read without assuming it exists.
@@ -356,10 +446,11 @@ export class SadaSend {
    */
   readonly emails = {
     send: async (input: SendInput): Promise<SendResult> => {
-      const { idempotencyKey, channel, source, agentName, agent_name, headers, ...rest } = input;
+      const { idempotencyKey, channel, source, agentName, agent_name, verifyBeforeSend, verify_before_send, marketing, headers, ...rest } = input;
       const resolvedChannel = channel ?? this.#channel;
       const resolvedSource = source ?? this.#source;
       const resolvedAgent = agentName ?? agent_name ?? this.#agentName;
+      const resolvedVerify = verifyBeforeSend ?? verify_before_send;
 
       const outgoingHeaders: Record<string, string> = { ...(headers ?? {}) };
       if (resolvedAgent) outgoingHeaders['x-sadasend-agent'] = resolvedAgent;
@@ -373,11 +464,11 @@ export class SadaSend {
           ...(resolvedChannel ? { channel: resolvedChannel } : {}),
           ...(resolvedSource ? { source: resolvedSource } : {}),
           ...(resolvedAgent ? { agent_name: resolvedAgent } : {}),
+          ...(typeof resolvedVerify === 'boolean' ? { verify_before_send: resolvedVerify } : {}),
+          ...(typeof marketing === 'boolean' ? { marketing } : {}),
           to: Array.isArray(rest.to) ? rest.to : [rest.to],
           scheduledAt: rest.scheduledAt instanceof Date ? rest.scheduledAt.toISOString() : rest.scheduledAt,
         },
-        // Generated when absent, which is the point: without one, a retry
-        // after a timeout is a second email to a real person.
         idempotencyKey: idempotencyKey ?? crypto.randomUUID(),
       },
       );
@@ -390,15 +481,18 @@ export class SadaSend {
     ): Promise<Result<BatchResult>> => {
       const body = {
         emails: items.map((item) => {
-          const { idempotencyKey, channel, source, agentName, agent_name, ...rest } = item;
+          const { idempotencyKey, channel, source, agentName, agent_name, verifyBeforeSend, verify_before_send, marketing, ...rest } = item;
           const resolvedChannel = channel ?? this.#channel;
           const resolvedSource = source ?? this.#source;
           const resolvedAgent = agentName ?? agent_name ?? this.#agentName;
+          const resolvedVerify = verifyBeforeSend ?? verify_before_send;
           return {
             ...rest,
             ...(resolvedChannel ? { channel: resolvedChannel } : {}),
             ...(resolvedSource ? { source: resolvedSource } : {}),
             ...(resolvedAgent ? { agent_name: resolvedAgent } : {}),
+            ...(typeof resolvedVerify === 'boolean' ? { verify_before_send: resolvedVerify } : {}),
+            ...(typeof marketing === 'boolean' ? { marketing } : {}),
             to: Array.isArray(rest.to) ? rest.to : [rest.to],
             scheduledAt: rest.scheduledAt instanceof Date ? rest.scheduledAt.toISOString() : rest.scheduledAt,
           };
@@ -505,6 +599,17 @@ export class SadaSend {
     list: () => this.#request<{ tools: DeliverabilityTool[] }>('GET', '/tools'),
     check: (check: string, subject: string, selector?: string) =>
       this.#request<any>('POST', `/tools/${encodeURIComponent(check)}`, { body: { subject, selector } }),
+    buildUtm: (options: UtmBuildInput) =>
+      this.#request<UtmBuildResult>('POST', '/tools/utm', { body: options }),
+    verify: (email: string) =>
+      this.#request<VerificationResult>('POST', '/tools/verify', { body: { email } }),
+    verifyBatch: (emails: string[]) =>
+      this.#request<BatchVerificationResult>('POST', '/tools/verify/batch', { body: { emails } }),
+  };
+
+  readonly billing = {
+    creditsCheckout: (input: CreditsCheckoutInput) =>
+      this.#request<CreditsCheckoutResult>('POST', '/billing/credits/checkout', { body: input }),
   };
 
   readonly webhooks = {

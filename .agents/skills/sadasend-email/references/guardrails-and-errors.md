@@ -82,3 +82,47 @@ SadaSend is engineered to prevent autonomous AI agents from hallucinating, leaki
 - **Why It Happens:** The agent lost internet connectivity, the socket timed out, or DNS failed after exhausting all retries.
 - **Agent Self-Correction Strategy:**
   - Catch `ConnectionError`. Because idempotency keys are automatically attached by the SDK, retrying the operation later will not cause duplicate sends if the original request was received.
+
+---
+
+## 7. Deliverability Shield Refusal (`UndeliverableRecipientError`)
+
+- **HTTP Status:** `422 Unprocessable Entity`
+- **Error Code:** `undeliverable_recipient`
+- **Why It Happens:** When `verifyBeforeSend: true` (or `verify_before_send`) is enabled, the server performs an instant pre-send MX, syntax, and disposable mailbox check. If the recipient domain has no MX records, the mailbox is disposable, or syntax is invalid, the send is refused immediately.
+- **Key Advantage:** Debits **0** account quota and protects your sending domain reputation from hard bounces.
+- **Payload Properties:**
+  - `error.recipient`: The rejected recipient email address.
+- **Agent Self-Correction Strategy:**
+  1. Do not retry dispatching to this email address.
+  2. Flag the recipient record in your agent state/database as invalid or undeliverable.
+
+---
+
+## 8. Subject Formatting & Injection Defense (`InvalidSubjectError`)
+
+- **HTTP Status:** `400 Bad Request`
+- **Error Code:** `invalid_subject`
+- **Why It Happens:** The subject is empty or contains CRLF (`\r`, `\n`) control characters that could facilitate email header injection.
+- **Agent Self-Correction Strategy:**
+  1. Sanitize subject text: strip out `\r` and `\n` characters before resubmitting.
+
+---
+
+## 9. Scheduling Window Constraints (`InvalidDateError`)
+
+- **HTTP Status:** `400 Bad Request`
+- **Error Code:** `invalid_date`
+- **Why It Happens:** `scheduledAt` is formatted incorrectly, in the past, or set more than 72 hours in advance.
+- **Agent Self-Correction Strategy:**
+  1. Ensure `scheduledAt` is a valid JavaScript `Date` or ISO string between 5 minutes and 72 hours from the current UTC timestamp.
+
+---
+
+## 10. Plan Tiers & Batch Boundaries (`PlanTierInsufficientError`, `BatchSizeExceededError`)
+
+- **HTTP Status:** `403 Forbidden` (`plan_tier_insufficient`) / `400 Bad Request` (`batch_size_exceeded`)
+- **Why It Happens:** Attempting to access an enterprise/scale feature or sending a batch larger than permitted.
+- **Agent Self-Correction Strategy:**
+  1. For batch errors, split items into smaller chunks (<= 100 per request).
+  2. For tier errors, notify the human supervisor that plan elevation is required.

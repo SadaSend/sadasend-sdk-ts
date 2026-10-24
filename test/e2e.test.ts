@@ -7,6 +7,7 @@ import {
   InsufficientScopeError,
   RecipientNotAllowlistedError,
   RecipientSuppressedError,
+  UndeliverableRecipientError,
 } from '../src/errors.js';
 
 let server: ReturnType<typeof Bun.serve>;
@@ -255,6 +256,15 @@ beforeAll(async () => {
       // 3. Email Routes
       if (url.pathname === '/emails' && method === 'POST') {
         const body = await req.json();
+
+        if (body.verify_before_send && (body.to === 'undeliverable@fake.test' || (Array.isArray(body.to) && body.to.includes('undeliverable@fake.test')))) {
+          return new Response(JSON.stringify({
+            error: 'undeliverable_recipient',
+            message: 'Recipient address undeliverable@fake.test failed deliverability checks.',
+            recipient: 'undeliverable@fake.test',
+          }), { status: 422, headers: { 'content-type': 'application/json' } });
+        }
+
         const id = `msg_${crypto.randomUUID()}`;
         const isDryRun = Boolean(body.dryRun);
         const isApproval = body.agent_name === 'approval-agent';
@@ -510,6 +520,85 @@ beforeAll(async () => {
         });
       }
 
+      if (url.pathname === '/tools/verify' && method === 'POST') {
+        const body = await req.json();
+        const email = body.email || '';
+        const isBad = email.includes('bad') || email.includes('undeliverable');
+        const [user = '', domain = ''] = email.split('@');
+        return Response.json({
+          email,
+          user,
+          domain,
+          status: isBad ? 'undeliverable' : 'deliverable',
+          verdict: isBad ? 'fail' : 'pass',
+          score: isBad ? 0 : 98,
+          checks: {
+            syntax: { valid: true },
+            mx: { valid: !isBad, records: isBad ? [] : ['mx1.example.com'] },
+            disposable: { isDisposable: false },
+            role: { isRole: false },
+          },
+          rows: [
+            { label: 'MX', value: isBad ? 'missing' : 'valid', verdict: isBad ? 'fail' : 'pass' },
+          ],
+          summary: isBad ? 'Undeliverable address' : 'Address is deliverable',
+        });
+      }
+
+      if (url.pathname === '/tools/verify/batch' && method === 'POST') {
+        const body = await req.json();
+        const emails: string[] = body.emails || [];
+        const results = emails.map((email) => {
+          const isBad = email.includes('bad') || email.includes('undeliverable');
+          const [user = '', domain = ''] = email.split('@');
+          return {
+            email,
+            user,
+            domain,
+            status: isBad ? 'undeliverable' : 'deliverable',
+            verdict: isBad ? 'fail' : 'pass',
+            score: isBad ? 0 : 98,
+            checks: {
+              syntax: { valid: true },
+              mx: { valid: !isBad },
+              disposable: { isDisposable: false },
+              role: { isRole: false },
+            },
+            rows: [],
+            summary: isBad ? 'Undeliverable' : 'Deliverable',
+          };
+        });
+        const deliverable = results.filter((r) => r.status === 'deliverable').length;
+        const undeliverable = results.length - deliverable;
+        return Response.json({
+          ok: true,
+          total: emails.length,
+          deliverable,
+          undeliverable,
+          disposable: 0,
+          role_account: 0,
+          results,
+        });
+      }
+
+      if (url.pathname === '/tools/utm' && method === 'POST') {
+        const body = await req.json();
+        const rawUrl = new URL(body.url || 'https://example.com');
+        if (body.source) rawUrl.searchParams.set('utm_source', body.source);
+        if (body.medium) rawUrl.searchParams.set('utm_medium', body.medium);
+        if (body.campaign) rawUrl.searchParams.set('utm_campaign', body.campaign);
+        if (body.term) rawUrl.searchParams.set('utm_term', body.term);
+        if (body.content) rawUrl.searchParams.set('utm_content', body.content);
+        const params: Record<string, string> = {};
+        rawUrl.searchParams.forEach((v, k) => { params[k] = v; });
+        return Response.json({
+          ok: true,
+          original: body.url || 'https://example.com',
+          tagged: rawUrl.toString(),
+          params,
+        });
+      }
+
       if (url.pathname.startsWith('/tools/') && method === 'POST') {
         const body = await req.json();
         return Response.json({
@@ -517,6 +606,17 @@ beforeAll(async () => {
           subject: body.subject,
           status: 'ok',
           verdict: 'pass',
+        });
+      }
+
+      // Billing Routes
+      if (url.pathname === '/billing/credits/checkout' && method === 'POST') {
+        return Response.json({
+          transactionId: 'txn_mock_credits_9988',
+          checkoutUrl: 'https://checkout.paddle.com/test-checkout-12345',
+          priceId: 'pri_test_123',
+          clientToken: 'token_mock_test',
+          environment: 'sandbox',
         });
       }
 
@@ -932,6 +1032,68 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
     } catch (err: any) {
       expect(err).toBeInstanceOf(ConnectionError);
       expect(err.attempts).toBe(2);
+    }
+  });
+
+  test('Deliverability shield, tools verification, UTM builder, and billing checkout execute end-to-end', async () => {
+    const client = new SadaSend(TEST_KEY, { baseUrl });
+
+    // Single verification
+    const single = await client.tools.verify('verified@example.com');
+    expect(single.ok).toBe(true);
+    if (single.ok) {
+      expect(single.data.status).toBe('deliverable');
+      expect(single.data.verdict).toBe('pass');
+      expect(single.data.score).toBe(98);
+    }
+
+    // Batch verification
+    const batch = await client.tools.verifyBatch(['ok@example.com', 'bad@fake.test']);
+    expect(batch.ok).toBe(true);
+    if (batch.ok) {
+      expect(batch.data.total).toBe(2);
+      expect(batch.data.deliverable).toBe(1);
+      expect(batch.data.undeliverable).toBe(1);
+    }
+
+    // UTM builder
+    const utm = await client.tools.buildUtm({
+      url: 'https://example.com/pricing',
+      source: 'newsletter',
+      medium: 'email',
+      campaign: 'q4_launch',
+    });
+    expect(utm.ok).toBe(true);
+    if (utm.ok) {
+      expect(utm.data.tagged).toContain('utm_source=newsletter');
+      expect(utm.data.tagged).toContain('utm_campaign=q4_launch');
+      expect(utm.data.params.utm_source).toBe('newsletter');
+    }
+
+    // Billing checkout
+    const checkout = await client.billing.creditsCheckout({
+      pack: '25k',
+      type: 'verify',
+      returnUrl: 'https://example.com/dashboard',
+    });
+    expect(checkout.ok).toBe(true);
+    if (checkout.ok) {
+      expect(checkout.data.checkoutUrl).toBe('https://checkout.paddle.com/test-checkout-12345');
+      expect(checkout.data.transactionId).toBe('txn_mock_credits_9988');
+    }
+
+    // Deliverability shield in emails.send()
+    const shieldedBad = await client.emails.send({
+      from: 'noreply@onboarding.sadasend.com',
+      to: 'undeliverable@fake.test',
+      subject: 'Shield Test',
+      text: 'Shield',
+      verifyBeforeSend: true,
+    });
+    expect(shieldedBad.ok).toBe(false);
+    if (!shieldedBad.ok) {
+      expect(shieldedBad.error).toBeInstanceOf(UndeliverableRecipientError);
+      expect((shieldedBad.error as UndeliverableRecipientError).recipient).toBe('undeliverable@fake.test');
     }
   });
 

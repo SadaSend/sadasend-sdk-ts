@@ -98,6 +98,47 @@ export class RecipientSuppressedError extends SadaSendError {
 }
 
 /** The same key with a different body. The first request stands. */
+
+/**
+ * Real-time deliverability guardrail refusal (`verifyBeforeSend: true`).
+ * The recipient failed syntax, DNS MX lookup, or was identified as a disposable/dead address.
+ * No email credits or monthly quota are debited.
+ */
+export class UndeliverableRecipientError extends SadaSendError {
+  get recipient(): string | undefined {
+    return typeof this.body.recipient === 'string' ? this.body.recipient : undefined;
+  }
+
+  get reason(): string | undefined {
+    return typeof this.body.reason === 'string' ? this.body.reason : undefined;
+  }
+
+  get suggestion(): string | undefined {
+    return typeof this.body.suggestion === 'string' ? this.body.suggestion : undefined;
+  }
+}
+
+/** The subject violates RFC 5322 line limits (> 998 characters) or contains forbidden control characters. */
+export class InvalidSubjectError extends SadaSendError { }
+
+/** The scheduledAt date is invalid, in the past, or beyond the maximum 72-hour scheduling window. */
+export class InvalidDateError extends SadaSendError { }
+
+/** The batch request exceeded the maximum allowed items (100). */
+export class BatchSizeExceededError extends SadaSendError { }
+
+/** The requested feature (e.g. batch size or rate limit) requires an upgraded plan tier. */
+export class PlanTierInsufficientError extends SadaSendError { }
+
+/** The unauthenticated guest rate limit for email verification (5/day) has been exceeded. */
+export class AnonymousLimitExceededError extends SadaSendError { }
+
+/** A pending team invitation already exists for this email address. */
+export class InvitationAlreadyPendingError extends SadaSendError { }
+
+/** The selected plan cannot be purchased via this checkout route. */
+export class InvalidPlanError extends SadaSendError { }
+
 export class IdempotencyKeyReusedError extends SadaSendError { }
 
 /**
@@ -166,9 +207,18 @@ const BY_CODE: Record<string, new (c: string, s: number, m: string, b: Record<st
   domain_not_found: DomainNotFoundError,
   domain_not_verified: DomainNotVerifiedError,
   recipient_not_allowlisted: RecipientNotAllowlistedError,
-  recipient_suppressed: RecipientSuppressedError,
+    recipient_suppressed: RecipientSuppressedError,
   idempotency_key_reused: IdempotencyKeyReusedError,
   idempotency_key_in_progress: IdempotencyInProgressError,
+  undeliverable_recipient: UndeliverableRecipientError,
+  invalid_subject: InvalidSubjectError,
+  invalid_date: InvalidDateError,
+  batch_size_exceeded: BatchSizeExceededError,
+  plan_tier_insufficient: PlanTierInsufficientError,
+  anonymous_limit_exceeded: AnonymousLimitExceededError,
+  invitation_already_pending: InvitationAlreadyPendingError,
+  invalid_plan: InvalidPlanError,
+  free_plan_no_checkout: InvalidPlanError,
 };
 
 export function toError(
@@ -181,11 +231,11 @@ export function toError(
     ? body.message
     : `The API returned ${status} with no error message.`;
 
+  const Cls = BY_CODE[code];
+  if (Cls) return new Cls(code, status, message, body);
   if (status === 429) return new RateLimitError(code, status, message, body, retryAfterSeconds);
   if (status >= 500) return new ServerError(code, status, message, body);
-
-  const Cls = BY_CODE[code];
-  return Cls ? new Cls(code, status, message, body) : new SadaSendError(code, status, message, body);
+  return new SadaSendError(code, status, message, body);
 }
 
 /**
