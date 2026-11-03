@@ -275,11 +275,13 @@ beforeAll(async () => {
           to: body.to,
           subject: body.subject ?? 'No Subject',
           status: isApproval ? 'pending_approval' : 'queued',
+          holdType: isApproval ? ('security' as const) : null,
           at: new Date().toISOString(),
           dryRun: isDryRun || undefined,
           channel: body.channel ?? 'sdk',
           source: body.source ?? 'backend',
           agentName: body.agent_name,
+          provenance: body.provenance,
           events: [{ type: 'queued', at: new Date().toISOString() }],
         };
         state.messages.set(id, record);
@@ -287,6 +289,7 @@ beforeAll(async () => {
         return new Response(JSON.stringify({
           id,
           status: record.status,
+          holdType: record.holdType,
           ...(isDryRun ? { dryRun: true } : {}),
         }), {
           status: 202,
@@ -609,17 +612,6 @@ beforeAll(async () => {
         });
       }
 
-      // Billing Routes
-      if (url.pathname === '/billing/credits/checkout' && method === 'POST') {
-        return Response.json({
-          transactionId: 'txn_mock_credits_9988',
-          checkoutUrl: 'https://checkout.paddle.com/test-checkout-12345',
-          priceId: 'pri_test_123',
-          clientToken: 'token_mock_test',
-          environment: 'sandbox',
-        });
-      }
-
       // 8. Webhooks
       if (url.pathname === '/webhooks' && method === 'GET') {
         return Response.json({
@@ -644,6 +636,427 @@ beforeAll(async () => {
               success: true,
             },
           ],
+        });
+      }
+
+      // 9. Inbound Routes & Parsing
+      if (url.pathname === '/inbound/routes' && method === 'GET') {
+        return Response.json({
+          count: 1,
+          routes: [
+            {
+              id: 'rt_live_1',
+              pattern: '*@inbound.sadasend.com',
+              targetUrl: 'https://webhook.site/inbound',
+              enabled: true,
+              priority: 10,
+              description: 'Primary agent webhook inbound route',
+              createdAt: '2026-10-10T00:00:00Z',
+              updatedAt: '2026-10-10T00:00:00Z',
+            },
+          ],
+        });
+      }
+
+      if (url.pathname === '/inbound/routes' && method === 'POST') {
+        const body = await req.json();
+        return Response.json({
+          ok: true,
+          route: {
+            id: 'rt_live_created',
+            pattern: body.pattern,
+            targetUrl: body.targetUrl,
+            enabled: body.enabled ?? true,
+            priority: body.priority ?? 0,
+            description: body.description,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }, { status: 201 });
+      }
+
+      if (url.pathname.startsWith('/inbound/routes/') && method === 'GET') {
+        const id = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({
+          ok: true,
+          route: {
+            id,
+            pattern: '*@inbound.sadasend.com',
+            targetUrl: 'https://webhook.site/inbound',
+            enabled: true,
+            priority: 10,
+            createdAt: '2026-10-10T00:00:00Z',
+            updatedAt: '2026-10-10T00:00:00Z',
+          },
+        });
+      }
+
+      if (url.pathname.startsWith('/inbound/routes/') && method === 'PATCH') {
+        const id = decodeURIComponent(url.pathname.split('/')[3]!);
+        const body = await req.json();
+        return Response.json({
+          ok: true,
+          route: {
+            id,
+            pattern: body.pattern ?? '*@inbound.sadasend.com',
+            targetUrl: body.targetUrl ?? 'https://webhook.site/inbound',
+            enabled: body.enabled ?? false,
+            priority: body.priority ?? 10,
+            createdAt: '2026-10-10T00:00:00Z',
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      if (url.pathname.startsWith('/inbound/routes/') && method === 'DELETE') {
+        const id = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({ ok: true, id, deleted: true });
+      }
+
+      if (url.pathname === '/inbound/messages' && method === 'GET') {
+        return Response.json({
+          count: 1,
+          messages: [
+            {
+              id: 'in_msg_100',
+              from: 'sender@client.com',
+              to: ['support@inbound.sadasend.com'],
+              subject: 'Need help with account',
+              routeId: 'rt_live_1',
+              status: 'processed',
+              receivedAt: '2026-10-10T12:00:00Z',
+            },
+          ],
+        });
+      }
+
+      if (url.pathname.startsWith('/inbound/messages/') && method === 'GET') {
+        const id = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({
+          ok: true,
+          message: {
+            id,
+            from: 'sender@client.com',
+            to: ['support@inbound.sadasend.com'],
+            subject: 'Need help with account',
+            status: 'processed',
+            receivedAt: '2026-10-10T12:00:00Z',
+          },
+        });
+      }
+
+      if (url.pathname === '/inbound/parse' && method === 'POST') {
+        const body = await req.json();
+        return Response.json({
+          ok: true,
+          quarantined: false,
+          from: body.from ?? 'sender@corp.com',
+          to: body.to ?? ['agent@inbound.sadasend.com'],
+          subject: body.subject ?? 'Inbound report',
+          thread: {
+            threadId: 'th_wire_1',
+            cleanSubject: 'Inbound report',
+            isThreadRoot: true,
+            threadDepth: 1,
+          },
+          content: {
+            cleanMarkdown: body.text ? `Cleaned: ${body.text}` : 'Parsed body markdown',
+            hasQuotedHistory: false,
+            hasSignature: false,
+            telemetry: {
+              originalBytes: 100,
+              cleanedBytes: 80,
+              originalTokensEst: 25,
+              cleanedTokensEst: 20,
+              tokenReductionPercent: 20,
+            },
+          },
+          security: {
+            injectionRiskScore: 0.02,
+            riskLevel: 'clean',
+            recommendedAction: 'pass',
+            quarantineRecommended: false,
+            hiddenContentDetected: false,
+            detections: [],
+          },
+        });
+      }
+
+      if (url.pathname === '/inbound/simulate' && method === 'POST') {
+        return Response.json({
+          matched: true,
+          targetUrl: 'https://webhook.site/inbound',
+          route: {
+            id: 'rt_live_1',
+            pattern: '*@inbound.sadasend.com',
+            targetUrl: 'https://webhook.site/inbound',
+            enabled: true,
+            priority: 10,
+            createdAt: '2026-10-10T00:00:00Z',
+            updatedAt: '2026-10-10T00:00:00Z',
+          },
+        });
+      }
+
+      // 10. DMARC Reports & Threats
+      if (url.pathname.startsWith('/dmarc/reports/') && method === 'GET') {
+        const id = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({
+          ok: true,
+          report: {
+            id,
+            org: 'Google Inc.',
+            reportId: 'rep_g_123',
+            domain: 'onboarding.sadasend.com',
+          },
+        });
+      }
+
+      if (url.pathname === '/dmarc/reports' && method === 'GET') {
+        return Response.json({
+          count: 1,
+          reports: [
+            {
+              id: 'rep_wire_1',
+              org: 'Google Inc.',
+              reportId: 'rep_g_123',
+              dateRangeBegin: '2026-10-01T00:00:00Z',
+              dateRangeEnd: '2026-10-02T00:00:00Z',
+              domain: 'onboarding.sadasend.com',
+              policy: 'reject',
+              totalMessages: 500,
+              spfPassCount: 499,
+              dkimPassCount: 500,
+              fullyAlignedCount: 499,
+              passRate: 0.998,
+              createdAt: '2026-10-02T04:00:00Z',
+            },
+          ],
+        });
+      }
+
+      if (url.pathname === '/dmarc/reports' && method === 'POST') {
+        return Response.json({ ok: true, id: 'rep_wire_uploaded' }, { status: 201 });
+      }
+
+      if (url.pathname.startsWith('/dmarc/domains/') && url.pathname.endsWith('/summary') && method === 'GET') {
+        const domain = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({
+          domain,
+          totalReports: 12,
+          totalMessages: 5000,
+          overallPassRate: 0.999,
+          dkimAlignmentPct: 99.9,
+          spfAlignmentPct: 100,
+          currentPolicy: 'reject',
+          recommendedPolicy: 'reject',
+        });
+      }
+
+      if (url.pathname === '/dmarc/threats' && method === 'GET') {
+        return Response.json({
+          ok: true,
+          threats: [
+            {
+              ip: '198.51.100.42',
+              domain: 'phish-origin.bad',
+              messageCount: 8,
+              country: 'US',
+              lastSeenAt: '2026-10-10T08:00:00Z',
+            },
+          ],
+        });
+      }
+
+      // 11. Arbiter Multi-Agent Arbitration
+      if (url.pathname === '/arbiter/stats' && method === 'GET') {
+        return Response.json({
+          ok: true,
+          activeCooldownsCount: 2,
+          openTicketsCount: 1,
+          collisionsPrevented: 37,
+        });
+      }
+
+      if (url.pathname.startsWith('/arbiter/recipients/') && url.pathname.endsWith('/cooldown') && method === 'POST') {
+        const recipient = decodeURIComponent(url.pathname.split('/')[3]!);
+        const body = await req.json();
+        return Response.json({
+          ok: true,
+          cooldown: true,
+          recipient,
+          durationSeconds: body.durationSeconds ?? 86400,
+          reason: body.reason,
+          expiresAt: new Date(Date.now() + (body.durationSeconds ?? 86400) * 1000).toISOString(),
+        });
+      }
+
+      if (url.pathname.startsWith('/arbiter/recipients/') && url.pathname.endsWith('/cooldown') && method === 'DELETE') {
+        const recipient = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({ ok: true, recipient, cleared: true });
+      }
+
+      if (url.pathname.startsWith('/arbiter/recipients/') && url.pathname.endsWith('/status') && method === 'GET') {
+        const recipient = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({
+          ok: true,
+          recipient,
+          cooldownActive: false,
+          remainingSeconds: 0,
+        });
+      }
+
+      if (url.pathname === '/arbiter/tickets' && method === 'POST') {
+        const body = await req.json();
+        return Response.json({
+          ok: true,
+          recipient: body.recipient,
+          ticketId: 'tkt_arbiter_wire_1',
+        });
+      }
+
+      if (url.pathname.startsWith('/arbiter/tickets/') && method === 'DELETE') {
+        const recipient = decodeURIComponent(url.pathname.split('/')[3]!);
+        return Response.json({ ok: true, recipient, resolved: true });
+      }
+
+      // 12. Ephemeral Inboxes
+      if (url.pathname === '/inboxes' && method === 'GET') {
+        return Response.json({
+          ok: true,
+          count: 1,
+          inboxes: [
+            {
+              id: 'inb_wire_1',
+              email: 'e2e-agent@auth.sadasend.com',
+              alias: 'e2e-agent',
+              domain: 'auth.sadasend.com',
+              ttlSeconds: 3600,
+              createdAt: '2026-10-10T00:00:00Z',
+              expiresAt: '2026-10-10T01:00:00Z',
+              messageCount: 1,
+              latestOtp: '654321',
+            },
+          ],
+        });
+      }
+
+      if (url.pathname === '/inboxes/ephemeral' && method === 'POST') {
+        const body = await req.json();
+        return Response.json({
+          ok: true,
+          inbox: {
+            id: 'inb_wire_new',
+            email: `${body?.alias ?? 'ephemeral'}@auth.sadasend.com`,
+            alias: body?.alias ?? 'ephemeral',
+            domain: 'auth.sadasend.com',
+            ttlSeconds: body?.ttlSeconds ?? 1800,
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + (body?.ttlSeconds ?? 1800) * 1000).toISOString(),
+            messageCount: 0,
+          },
+        }, { status: 201 });
+      }
+
+      if (url.pathname.startsWith('/inboxes/') && url.pathname.endsWith('/otp') && method === 'GET') {
+        const id = decodeURIComponent(url.pathname.split('/')[2]!);
+        return Response.json({
+          ok: true,
+          inboxId: id,
+          email: 'e2e-agent@auth.sadasend.com',
+          code: '654321',
+          otp: '654321',
+          magicLink: null,
+        });
+      }
+
+      if (url.pathname.startsWith('/inboxes/') && url.pathname.endsWith('/messages') && method === 'GET') {
+        return Response.json({
+          ok: true,
+          messages: [
+            {
+              id: 'inb_m_1',
+              from: 'security@service.com',
+              subject: 'Your One-Time Code: 654321',
+              receivedAt: '2026-10-10T00:05:00Z',
+              otp: '654321',
+            },
+          ],
+        });
+      }
+
+      if (url.pathname.startsWith('/inboxes/') && url.pathname.endsWith('/stream') && method === 'GET') {
+        const id = decodeURIComponent(url.pathname.split('/')[2]!);
+        return Response.json({
+          ok: true,
+          url: `https://api.sadasend.com/inboxes/${id}/stream`,
+        });
+      }
+
+      if (url.pathname === '/inboxes/inbound' && method === 'POST') {
+        return Response.json({ ok: true, otp: '654321', magicLink: null }, { status: 201 });
+      }
+
+      if (url.pathname.startsWith('/inboxes/') && method === 'GET') {
+        const id = decodeURIComponent(url.pathname.split('/')[2]!);
+        return Response.json({
+          ok: true,
+          inbox: {
+            id,
+            email: 'e2e-agent@auth.sadasend.com',
+            alias: 'e2e-agent',
+            domain: 'auth.sadasend.com',
+            ttlSeconds: 3600,
+            createdAt: '2026-10-10T00:00:00Z',
+            expiresAt: '2026-10-10T01:00:00Z',
+            messageCount: 1,
+          },
+        });
+      }
+
+      if (url.pathname.startsWith('/inboxes/') && method === 'DELETE') {
+        const id = decodeURIComponent(url.pathname.split('/')[2]!);
+        return Response.json({ ok: true, id, deleted: true });
+      }
+
+      // 13. Testing Inbound & WaitForCode
+      if (url.pathname === '/testing/inbound' && method === 'POST') {
+        return Response.json({ ok: true, status: 'ingested', id: 'tst_wire_inbound_1' });
+      }
+
+      if (url.pathname === '/testing/wait-for-code' && method === 'POST') {
+        return Response.json({
+          ok: true,
+          code: '772211',
+          magicLink: null,
+          messageId: 'tst_msg_wait_1',
+        });
+      }
+
+      if (url.pathname.startsWith('/testing/inboxes/') && url.pathname.endsWith('/code') && method === 'GET') {
+        return Response.json({ ok: true, code: '772211' });
+      }
+
+      if (url.pathname.startsWith('/testing/inboxes/') && url.pathname.endsWith('/latest') && method === 'GET') {
+        return Response.json({
+          ok: true,
+          message: { id: 'tst_msg_wait_1', code: '772211', subject: 'Verification code' },
+        });
+      }
+
+      // 14. Integrations
+      if (url.pathname === '/integrations/slack' && method === 'GET') {
+        return Response.json({
+          connected: true,
+          integration: {
+            id: 'slk_wire_int',
+            channel: 'slack',
+            name: 'Slack Alerts Channel',
+            enabled: true,
+            hasSigningSecret: true,
+            createdAt: '2026-10-01T00:00:00Z',
+            updatedAt: '2026-10-01T00:00:00Z',
+          },
         });
       }
 
@@ -907,6 +1320,265 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
         expect(deliveries.data.deliveries.length).toBe(1);
       }
     }
+
+    // 9. Inbound Routing, Messages, Parsing & Simulation
+    const inbRoutes = await client.inbound.routes.list();
+    expect(inbRoutes.ok).toBe(true);
+    if (inbRoutes.ok) {
+      expect(inbRoutes.data.routes.length).toBe(1);
+      expect(inbRoutes.data.routes[0]!.pattern).toBe('*@inbound.sadasend.com');
+    }
+
+    const createdRoute = await client.inbound.routes.create({
+      pattern: 'support@inbound.sadasend.com',
+      targetUrl: 'https://webhook.site/support',
+      priority: 20,
+      description: 'Support queue',
+    });
+    expect(createdRoute.ok).toBe(true);
+    if (createdRoute.ok) {
+      expect(createdRoute.data.route.pattern).toBe('support@inbound.sadasend.com');
+    }
+
+    const fetchedRoute = await client.inbound.routes.get('rt_live_1');
+    expect(fetchedRoute.ok).toBe(true);
+
+    const patchedRoute = await client.inbound.routes.update('rt_live_1', { enabled: false });
+    expect(patchedRoute.ok).toBe(true);
+    if (patchedRoute.ok) {
+      expect(patchedRoute.data.route.enabled).toBe(false);
+    }
+
+    const deletedRoute = await client.inbound.routes.delete('rt_live_1');
+    expect(deletedRoute.ok).toBe(true);
+    if (deletedRoute.ok) {
+      expect(deletedRoute.data.deleted).toBe(true);
+    }
+
+    const inboundMsgs = await client.inbound.messages.list({ limit: 10 });
+    expect(inboundMsgs.ok).toBe(true);
+    if (inboundMsgs.ok) {
+      expect(inboundMsgs.data.messages.length).toBe(1);
+    }
+
+    const singleInbMsg = await client.inbound.messages.get('in_msg_100');
+    expect(singleInbMsg.ok).toBe(true);
+
+    const parseResult = await client.inbound.parse({
+      from: 'sender@client.com',
+      to: ['support@inbound.sadasend.com'],
+      subject: 'Inbound report',
+      text: 'Please review our invoice',
+    });
+    expect(parseResult.ok).toBe(true);
+    if (parseResult.ok) {
+      expect(parseResult.data.quarantined).toBe(false);
+      expect(parseResult.data.content.cleanMarkdown).toContain('Please review our invoice');
+      expect(parseResult.data.security.riskLevel).toBe('clean');
+    }
+
+    const simResult = await client.inbound.simulate('support@inbound.sadasend.com');
+    expect(simResult.ok).toBe(true);
+    if (simResult.ok) {
+      expect(simResult.data.matched).toBe(true);
+      expect(simResult.data.targetUrl).toBe('https://webhook.site/inbound');
+    }
+
+    // 10. DMARC Reports, Summary & Threats
+    const dmarcList = await client.dmarc.reports.list({ domain: 'onboarding.sadasend.com' });
+    expect(dmarcList.ok).toBe(true);
+    if (dmarcList.ok) {
+      expect(dmarcList.data.reports.length).toBe(1);
+      expect(dmarcList.data.reports[0]!.passRate).toBeGreaterThan(0.99);
+    }
+
+    const dmarcUpload = await client.dmarc.reports.create('<feedback></feedback>');
+    expect(dmarcUpload.ok).toBe(true);
+    if (dmarcUpload.ok) {
+      expect(dmarcUpload.data.id).toBe('rep_wire_uploaded');
+    }
+
+    const dmarcReport = await client.dmarc.reports.get('rep_wire_1');
+    expect(dmarcReport.ok).toBe(true);
+
+    const dmarcSummary = await client.dmarc.summary('onboarding.sadasend.com');
+    expect(dmarcSummary.ok).toBe(true);
+    if (dmarcSummary.ok) {
+      expect(dmarcSummary.data.currentPolicy).toBe('reject');
+      expect(dmarcSummary.data.dkimAlignmentPct).toBeGreaterThan(99);
+    }
+
+    const dmarcThreats = await client.dmarc.threats();
+    expect(dmarcThreats.ok).toBe(true);
+    if (dmarcThreats.ok) {
+      expect(dmarcThreats.data.threats.length).toBe(1);
+      expect(dmarcThreats.data.threats[0]!.ip).toBe('198.51.100.42');
+    }
+
+    // 11. Multi-Agent Arbitration & Cooldowns
+    const arbStats = await client.arbiter.stats();
+    expect(arbStats.ok).toBe(true);
+    if (arbStats.ok) {
+      expect(arbStats.data.collisionsPrevented).toBe(37);
+    }
+
+    const cdSet = await client.arbiter.cooldowns.set('lead@enterprise.com', 86400, 'Agent outreach');
+    expect(cdSet.ok).toBe(true);
+    if (cdSet.ok) {
+      expect(cdSet.data.recipient).toBe('lead@enterprise.com');
+      expect(cdSet.data.cooldown).toBe(true);
+    }
+
+    const cdStatus = await client.arbiter.cooldowns.status('lead@enterprise.com');
+    expect(cdStatus.ok).toBe(true);
+
+    const cdClear = await client.arbiter.cooldowns.clear('lead@enterprise.com');
+    expect(cdClear.ok).toBe(true);
+    if (cdClear.ok) {
+      expect(cdClear.data.cleared).toBe(true);
+    }
+
+    const tktCreate = await client.arbiter.tickets.create('lead@enterprise.com', 'Human ticket open');
+    expect(tktCreate.ok).toBe(true);
+    if (tktCreate.ok) {
+      expect(tktCreate.data.ticketId).toBe('tkt_arbiter_wire_1');
+    }
+
+    const tktDelete = await client.arbiter.tickets.delete('lead@enterprise.com');
+    expect(tktDelete.ok).toBe(true);
+    if (tktDelete.ok) {
+      expect(tktDelete.data.resolved).toBe(true);
+    }
+
+    // 12. Ephemeral Inboxes
+    const inbList = await client.inboxes.list();
+    expect(inbList.ok).toBe(true);
+    if (inbList.ok) {
+      expect(inbList.data.inboxes.length).toBe(1);
+    }
+
+    const inbCreate = await client.inboxes.create({ alias: 'wire-agent', ttlSeconds: 1800 });
+    expect(inbCreate.ok).toBe(true);
+
+    const inbCreateEph = await client.inboxes.createEphemeral({ alias: 'wire-eph', ttlSeconds: 900 });
+    expect(inbCreateEph.ok).toBe(true);
+
+    const inbGet = await client.inboxes.get('inb_wire_1');
+    expect(inbGet.ok).toBe(true);
+
+    const inbOtp = await client.inboxes.otp('inb_wire_1', { waitFor: true, timeoutMs: 5000 });
+    expect(inbOtp.ok).toBe(true);
+    if (inbOtp.ok) {
+      expect(inbOtp.data.code).toBe('654321');
+    }
+
+    const ephemeralMsgs = await client.inboxes.messages('inb_wire_1');
+    expect(ephemeralMsgs.ok).toBe(true);
+    if (ephemeralMsgs.ok) {
+      expect(ephemeralMsgs.data.messages.length).toBe(1);
+    }
+
+    const inbStream = await client.inboxes.stream('inb_wire_1');
+    expect(inbStream.ok).toBe(true);
+    if (inbStream.ok) {
+      expect(inbStream.data.url).toContain('/inboxes/inb_wire_1/stream');
+    }
+
+    const inbInbound = await client.inboxes.inbound({
+      to: 'e2e-agent@auth.sadasend.com',
+      subject: 'Security Code',
+      text: 'Your code is 654321',
+    });
+    expect(inbInbound.ok).toBe(true);
+
+    const inbDelete = await client.inboxes.delete('inb_wire_1');
+    expect(inbDelete.ok).toBe(true);
+    if (inbDelete.ok) {
+      expect(inbDelete.data.deleted).toBe(true);
+    }
+
+    // 13. Testing Inbound & Wait For Code
+    const testInb = await client.testing.inbound({
+      to: 'test-qa@auth.sadasend.com',
+      subject: 'Verification',
+      text: 'Your security code: 772211',
+    });
+    expect(testInb.ok).toBe(true);
+    if (testInb.ok) {
+      expect(testInb.data.id).toBe('tst_wire_inbound_1');
+    }
+
+    const testWait = await client.testing.waitForCode({
+      to: 'test-qa@auth.sadasend.com',
+      timeoutMs: 5000,
+    });
+    expect(testWait.ok).toBe(true);
+    if (testWait.ok) {
+      expect(testWait.data.code).toBe('772211');
+    }
+
+    const testCode = await client.testing.inboxes.code('test-qa@auth.sadasend.com');
+    expect(testCode.ok).toBe(true);
+    if (testCode.ok) {
+      expect(testCode.data.code).toBe('772211');
+    }
+
+    const testLatest = await client.testing.inboxes.latest('test-qa@auth.sadasend.com');
+    expect(testLatest.ok).toBe(true);
+
+    // 14. Integrations
+    const slackIntegration = await client.integrations.slack();
+    expect(slackIntegration.ok).toBe(true);
+    if (slackIntegration.ok) {
+      expect(slackIntegration.data.connected).toBe(true);
+      expect(slackIntegration.data.integration?.channel).toBe('slack');
+    }
+
+    // 15. Structured Provenance and Hold Type Send
+    const provSend = await client.emails.send({
+      from: 'noreply@onboarding.sadasend.com',
+      to: 'recipient@example.com',
+      subject: 'Provenance & HoldType Wire Test',
+      text: 'Testing provenance metadata over real wire',
+      provenance: {
+        channel: 'agent',
+        source: 'workflow',
+        agentName: 'approval-agent',
+        priority: 'alert',
+      },
+    });
+    expect(provSend.ok).toBe(true);
+    if (provSend.ok) {
+      expect(provSend.status).toBe('pending_approval');
+      expect(provSend.holdType).toBe('security');
+
+      const heldGet = await client.emails.get(provSend.id);
+      expect(heldGet.ok).toBe(true);
+      if (heldGet.ok) {
+        expect(heldGet.data.holdType).toBe('security');
+        expect(heldGet.data.provenance?.agentName).toBe('approval-agent');
+        expect(heldGet.data.provenance?.priority).toBe('alert');
+      }
+    }
+
+    // 16. Agent Arbitration & Loop Breaker Wire Controls
+    const safetySend = await client.emails.send({
+      from: 'noreply@onboarding.sadasend.com',
+      to: 'recipient@example.com',
+      subject: 'Loop Breaker & Cooldown Wire Test',
+      text: 'Testing allowDuplicate and crossAgentCooldown over real wire',
+      allowDuplicate: true,
+      dlp: false,
+      crossAgentCooldown: '12h',
+      priority: 'critical',
+      ticketAware: true,
+    });
+    expect(safetySend.ok).toBe(true);
+    if (safetySend.ok) {
+      expect(safetySend.id).toMatch(/^msg_/);
+      const msgGet = await client.emails.get(safetySend.id);
+      expect(msgGet.ok).toBe(true);
+    }
   });
 
   test('Real wire retry on 503 recovery carries identical Idempotency-Key', async () => {
@@ -1035,7 +1707,7 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
     }
   });
 
-  test('Deliverability shield, tools verification, UTM builder, and billing checkout execute end-to-end', async () => {
+  test('Deliverability shield, tools verification, and UTM builder execute end-to-end', async () => {
     const client = new SadaSend(TEST_KEY, { baseUrl });
 
     // Single verification
@@ -1068,18 +1740,6 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
       expect(utm.data.tagged).toContain('utm_source=newsletter');
       expect(utm.data.tagged).toContain('utm_campaign=q4_launch');
       expect(utm.data.params.utm_source).toBe('newsletter');
-    }
-
-    // Billing checkout
-    const checkout = await client.billing.creditsCheckout({
-      pack: '25k',
-      type: 'verify',
-      returnUrl: 'https://example.com/dashboard',
-    });
-    expect(checkout.ok).toBe(true);
-    if (checkout.ok) {
-      expect(checkout.data.checkoutUrl).toBe('https://checkout.paddle.com/test-checkout-12345');
-      expect(checkout.data.transactionId).toBe('txn_mock_credits_9988');
     }
 
     // Deliverability shield in emails.send()

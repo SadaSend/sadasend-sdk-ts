@@ -31,8 +31,8 @@ function createMockClient(handler: (url: string, method: string, body?: any) => 
   return { sdk, calls };
 }
 
-describe("Verification, Billing & Typed Guardrails", () => {
-  test("emails.send passes verifyBeforeSend and marketing flags", async () => {
+describe("Verification & Typed Guardrails", () => {
+  test("emails.send passes verifyBeforeSend, marketing, dlp, allowDuplicate, and priority flags", async () => {
     const { sdk, calls } = createMockClient((url, method, body) => {
       return { status: 202, body: { id: "msg_v1", status: "queued" } };
     });
@@ -44,6 +44,11 @@ describe("Verification, Billing & Typed Guardrails", () => {
       text: "Testing verify before send",
       verifyBeforeSend: true,
       marketing: true,
+      allowDuplicate: true,
+      dlp: false,
+      crossAgentCooldown: "24h",
+      ticketAware: true,
+      priority: "critical",
     });
 
     expect(res.ok).toBe(true);
@@ -52,6 +57,12 @@ describe("Verification, Billing & Typed Guardrails", () => {
     expect(calls.length).toBe(1);
     expect(calls[0]!.body.verify_before_send).toBe(true);
     expect(calls[0]!.body.marketing).toBe(true);
+    expect(calls[0]!.body.allow_duplicate).toBe(true);
+    expect(calls[0]!.body.dlp).toBe(false);
+    expect(calls[0]!.body.cross_agent_cooldown).toBe("24h");
+    expect(calls[0]!.body.ticket_aware).toBe(true);
+    expect(calls[0]!.body.priority).toBe("critical");
+    expect(calls[0]!.headers?.["x-sadasend-priority"]).toBe("critical");
   });
 
   test("tools: verify and verifyBatch", async () => {
@@ -110,35 +121,6 @@ describe("Verification, Billing & Typed Guardrails", () => {
     }
 
     expect(calls.length).toBe(2);
-  });
-
-  test("billing: creditsCheckout initializes checkout transaction", async () => {
-    const { sdk, calls } = createMockClient((url, method, body) => {
-      if (url.endsWith("/billing/credits/checkout") && method === "POST") {
-        return {
-          status: 200,
-          body: {
-            transactionId: "txn_credit_123",
-            checkoutUrl: "https://sadasend.com?_ptxn=txn_credit_123",
-            priceId: "pri_verify_25k",
-            clientToken: "live_token_abc",
-            environment: "production",
-          },
-        };
-      }
-      return { status: 404, body: { error: "not_found" } };
-    });
-
-    const res = await sdk.billing.creditsCheckout({ pack: "25k", type: "verify" });
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data.transactionId).toBe("txn_credit_123");
-      expect(res.data.checkoutUrl).toContain("txn_credit_123");
-    }
-
-    expect(calls.length).toBe(1);
-    expect(calls[0]!.body.pack).toBe("25k");
-    expect(calls[0]!.body.type).toBe("verify");
   });
 
   test("typed guardrail errors: UndeliverableRecipientError, InvalidSubjectError, InvalidDateError", () => {

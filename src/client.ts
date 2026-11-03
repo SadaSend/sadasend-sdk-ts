@@ -48,6 +48,8 @@ export type UtmBuildResult = {
   ok: boolean;
   original: string;
   tagged: string;
+  /** Normalized URL (alias of `tagged`) */
+  url?: string;
   params: Record<string, string>;
 };
 
@@ -87,20 +89,6 @@ export type BatchVerificationResult = {
   disposable: number;
   role_account: number;
   results: VerificationResult[];
-};
-
-export type CreditsCheckoutInput = {
-  pack: string;
-  type?: 'verify' | 'send';
-  returnUrl?: string;
-};
-
-export type CreditsCheckoutResult = {
-  transactionId: string;
-  checkoutUrl: string;
-  priceId: string;
-  clientToken: string;
-  environment: string;
 };
 
 export type SendInput = {
@@ -167,13 +155,37 @@ export type SendInput = {
   channel?: string;
   /** Sending source persona: `backend`, `agent`, `automation`, `system`. */
   source?: string;
-  /** Associated AI agent identifier or name (e.g. `billing-bot`, `claude-code`). */
+  /** Associated AI agent identifier or name (e.g. `finance-bot`, `claude-code`). */
   agentName?: string;
   agent_name?: string;
+  /** Structured provenance & agent arbitration priority metadata. */
+  provenance?: MessageProvenance;
+  /** Bypass 5-minute rolling loop circuit breaker deduplication. */
+  allowDuplicate?: boolean;
+  allow_duplicate?: boolean;
+  bypassLoopBreaker?: boolean;
+  bypass_loop_breaker?: boolean;
+  /** Outbound DLP secret & PII scanning toggle (defaults to true). Set false to explicitly bypass. */
+  dlp?: boolean;
+  /** Contact cooldown for destination recipient (e.g. `24h`, `30m`). */
+  crossAgentCooldown?: string | number | boolean;
+  cross_agent_cooldown?: string | number | boolean;
+  /** Priority level for agent arbitration: `critical`, `alert`, `standard`, `bulk`, `follow_up`. */
+  priority?: 'critical' | 'alert' | 'standard' | 'bulk' | 'follow_up' | string;
+  /** Whether to respect open customer support ticket outreach holds. Defaults to true. */
+  ticketAware?: boolean;
+  ticket_aware?: boolean;
+};
+
+export type MessageProvenance = {
+  channel?: 'transactional' | 'marketing' | 'agent' | 'operations' | 'support' | 'notification' | string;
+  source?: 'api' | 'smtp' | 'mcp' | 'dashboard' | 'workflow' | string;
+  agentName?: string;
+  priority?: 'critical' | 'alert' | 'standard' | 'bulk' | 'follow_up' | string;
 };
 
 export type SendResult =
-  | { ok: true; id: string; status: 'queued' | 'pending_approval'; dryRun?: true; rendered?: unknown }
+  | { ok: true; id: string; status: 'queued' | 'pending_approval'; holdType?: 'tenant' | 'security' | null; dryRun?: true; rendered?: unknown }
   | { ok: false; error: SadaSendError };
 
 export type BatchItemResult = {
@@ -202,11 +214,13 @@ export type Message = {
   from: string;
   subject: string | null;
   status: MessageStatus;
+  holdType?: 'tenant' | 'security' | null;
   at: string;
   events?: { type: string; at: string; detail?: string }[];
   channel?: string;
   source?: string;
   agentName?: string | null;
+  provenance?: MessageProvenance;
 };
 
 export type AccountInfo = {
@@ -366,6 +380,245 @@ export type DeliverabilityTool = {
   description: string;
 };
 
+export type InboundRoute = {
+  id: string;
+  pattern: string;
+  targetUrl: string;
+  enabled: boolean;
+  priority: number;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type InboundRouteInput = {
+  pattern: string;
+  targetUrl: string;
+  enabled?: boolean;
+  priority?: number;
+  description?: string;
+};
+
+export type InboundMessageSummary = {
+  id: string;
+  from: string;
+  to: string[];
+  subject: string | null;
+  routeId?: string;
+  status: string;
+  receivedAt: string;
+};
+
+export type InboundParseInput = {
+  rawMime?: string;
+  from?: string;
+  to?: string[];
+  cc?: string[];
+  subject?: string;
+  text?: string;
+  html?: string;
+  messageId?: string;
+  inReplyTo?: string;
+  references?: string;
+  headers?: Record<string, string>;
+};
+
+export type InboundParseResult = {
+  ok: boolean;
+  quarantined: boolean;
+  from?: string;
+  to?: string[];
+  cc?: string[];
+  subject?: string;
+  thread?: {
+    threadId: string;
+    cleanSubject: string;
+    isThreadRoot: boolean;
+    threadDepth: number;
+    messageId?: string;
+    rootMessageId?: string;
+    parentMessageId?: string;
+    references?: string[];
+  };
+  content: {
+    cleanMarkdown: string;
+    hasQuotedHistory: boolean;
+    quotedHistory?: string;
+    hasSignature: boolean;
+    signature?: string;
+    telemetry?: {
+      originalBytes: number;
+      cleanedBytes: number;
+      originalTokensEst: number;
+      cleanedTokensEst: number;
+      tokenReductionPercent: number;
+    };
+  };
+  security: {
+    injectionRiskScore: number;
+    riskLevel: 'clean' | 'low' | 'medium' | 'critical' | string;
+    recommendedAction: 'pass' | 'flag' | 'quarantine' | string;
+    quarantineRecommended: boolean;
+    hiddenContentDetected: boolean;
+    detections: {
+      category: string;
+      pattern?: string;
+      preview?: string;
+      severity: number;
+      description?: string;
+    }[];
+  };
+};
+
+export type InboundSimulateResult = {
+  matched: boolean;
+  route?: InboundRoute;
+  targetUrl?: string;
+};
+
+export type DmarcReportSummary = {
+  id: string;
+  org: string;
+  reportId: string;
+  dateRangeBegin: string;
+  dateRangeEnd: string;
+  domain: string;
+  policy: string;
+  totalMessages: number;
+  spfPassCount: number;
+  dkimPassCount: number;
+  fullyAlignedCount: number;
+  passRate: number;
+  createdAt: string;
+};
+
+export type DmarcDomainSummary = {
+  domain: string;
+  totalReports: number;
+  totalMessages: number;
+  overallPassRate: number;
+  dkimAlignmentPct: number;
+  spfAlignmentPct: number;
+  currentPolicy: string;
+  recommendedPolicy: string;
+};
+
+export type DmarcThreat = {
+  ip: string;
+  domain: string;
+  messageCount: number;
+  country?: string;
+  lastSeenAt: string;
+};
+
+export type ArbiterStats = {
+  ok: boolean;
+  activeCooldownsCount: number;
+  openTicketsCount: number;
+  collisionsPrevented: number;
+};
+
+export type CooldownResult = {
+  ok: boolean;
+  cooldown: boolean;
+  recipient: string;
+  durationSeconds: number;
+  reason?: string;
+  expiresAt: string;
+};
+
+export type CooldownStatus = {
+  ok: boolean;
+  recipient: string;
+  cooldownActive: boolean;
+  remainingSeconds: number;
+  reason?: string;
+  expiresAt?: string;
+};
+
+export type EphemeralInbox = {
+  id: string;
+  email: string;
+  alias: string;
+  domain: string;
+  ttlSeconds: number;
+  createdAt: string;
+  expiresAt: string;
+  messageCount: number;
+  latestOtp?: string | null;
+  latestMagicLink?: string | null;
+};
+
+export type EphemeralInboxCreateInput = {
+  alias?: string;
+  domain?: string;
+  ttlSeconds?: number;
+  description?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type InboxOtpResult = {
+  ok: boolean;
+  inboxId: string;
+  email: string;
+  code?: string;
+  otp?: string;
+  magicLink?: string | null;
+  pending?: boolean;
+  message?: {
+    id: string;
+    from: string;
+    subject: string;
+    receivedAt: string;
+  };
+};
+
+export type InboxMessage = {
+  id: string;
+  from: string;
+  subject: string;
+  receivedAt: string;
+  otp?: string | null;
+  magicLink?: string | null;
+};
+
+export type TestingInboundInput = {
+  to: string;
+  from?: string;
+  subject?: string;
+  text?: string;
+  html?: string;
+};
+
+export type WaitForCodeInput = {
+  to: string;
+  timeoutMs?: number;
+  since?: string;
+};
+
+export type WaitForCodeResult = {
+  ok: boolean;
+  code: string;
+  magicLink?: string | null;
+  messageId?: string;
+};
+
+export type SlackIntegrationStatus = {
+  connected: boolean;
+  integration?: {
+    id: string;
+    channel: string;
+    name: string;
+    enabled: boolean;
+    channelName?: string;
+    teamName?: string;
+    hasSigningSecret: boolean;
+    webhookUrlMasked?: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+};
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: SadaSendError };
 
 export type ClientOptions = {
@@ -384,7 +637,7 @@ export type ClientOptions = {
   agentName?: string;
 };
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 
 /**
  * `process.env`, read without assuming it exists.
@@ -446,17 +699,44 @@ export class SadaSend {
    */
   readonly emails = {
     send: async (input: SendInput): Promise<SendResult> => {
-      const { idempotencyKey, channel, source, agentName, agent_name, verifyBeforeSend, verify_before_send, marketing, headers, ...rest } = input;
-      const resolvedChannel = channel ?? this.#channel;
-      const resolvedSource = source ?? this.#source;
-      const resolvedAgent = agentName ?? agent_name ?? this.#agentName;
+      const {
+        idempotencyKey,
+        channel,
+        source,
+        agentName,
+        agent_name,
+        verifyBeforeSend,
+        verify_before_send,
+        marketing,
+        provenance,
+        headers,
+        allowDuplicate,
+        allow_duplicate,
+        bypassLoopBreaker,
+        bypass_loop_breaker,
+        dlp,
+        crossAgentCooldown,
+        cross_agent_cooldown,
+        priority,
+        ticketAware,
+        ticket_aware,
+        ...rest
+      } = input;
+      const resolvedChannel = provenance?.channel ?? channel ?? this.#channel;
+      const resolvedSource = provenance?.source ?? source ?? this.#source;
+      const resolvedAgent = provenance?.agentName ?? agentName ?? agent_name ?? this.#agentName;
+      const resolvedPriority = provenance?.priority ?? priority;
       const resolvedVerify = verifyBeforeSend ?? verify_before_send;
+      const resolvedAllowDup = allowDuplicate ?? allow_duplicate ?? bypassLoopBreaker ?? bypass_loop_breaker;
+      const resolvedCooldown = crossAgentCooldown ?? cross_agent_cooldown;
+      const resolvedTicketAware = ticketAware ?? ticket_aware;
 
       const outgoingHeaders: Record<string, string> = { ...(headers ?? {}) };
       if (resolvedAgent) outgoingHeaders['x-sadasend-agent'] = resolvedAgent;
       if (resolvedSource) outgoingHeaders['x-sadasend-source'] = resolvedSource;
+      if (resolvedPriority) outgoingHeaders['x-sadasend-priority'] = resolvedPriority;
 
-      const r = await this.#request<{ id: string; status: 'queued' | 'pending_approval'; dryRun?: true; rendered?: unknown }>(
+      const r = await this.#request<{ id: string; status: 'queued' | 'pending_approval'; holdType?: 'tenant' | 'security' | null; dryRun?: true; rendered?: unknown }>(
         'POST', '/emails', {
         headers: outgoingHeaders,
         body: {
@@ -464,8 +744,14 @@ export class SadaSend {
           ...(resolvedChannel ? { channel: resolvedChannel } : {}),
           ...(resolvedSource ? { source: resolvedSource } : {}),
           ...(resolvedAgent ? { agent_name: resolvedAgent } : {}),
+          ...(resolvedPriority ? { priority: resolvedPriority } : {}),
+          ...(provenance ? { provenance } : {}),
           ...(typeof resolvedVerify === 'boolean' ? { verify_before_send: resolvedVerify } : {}),
           ...(typeof marketing === 'boolean' ? { marketing } : {}),
+          ...(typeof resolvedAllowDup === 'boolean' ? { allow_duplicate: resolvedAllowDup } : {}),
+          ...(typeof dlp === 'boolean' ? { dlp } : {}),
+          ...(resolvedCooldown !== undefined ? { cross_agent_cooldown: resolvedCooldown } : {}),
+          ...(typeof resolvedTicketAware === 'boolean' ? { ticket_aware: resolvedTicketAware } : {}),
           to: Array.isArray(rest.to) ? rest.to : [rest.to],
           scheduledAt: rest.scheduledAt instanceof Date ? rest.scheduledAt.toISOString() : rest.scheduledAt,
         },
@@ -481,18 +767,49 @@ export class SadaSend {
     ): Promise<Result<BatchResult>> => {
       const body = {
         emails: items.map((item) => {
-          const { idempotencyKey, channel, source, agentName, agent_name, verifyBeforeSend, verify_before_send, marketing, ...rest } = item;
-          const resolvedChannel = channel ?? this.#channel;
-          const resolvedSource = source ?? this.#source;
-          const resolvedAgent = agentName ?? agent_name ?? this.#agentName;
+          const {
+            idempotencyKey,
+            channel,
+            source,
+            agentName,
+            agent_name,
+            verifyBeforeSend,
+            verify_before_send,
+            marketing,
+            provenance,
+            allowDuplicate,
+            allow_duplicate,
+            bypassLoopBreaker,
+            bypass_loop_breaker,
+            dlp,
+            crossAgentCooldown,
+            cross_agent_cooldown,
+            priority,
+            ticketAware,
+            ticket_aware,
+            ...rest
+          } = item;
+          const resolvedChannel = provenance?.channel ?? channel ?? this.#channel;
+          const resolvedSource = provenance?.source ?? source ?? this.#source;
+          const resolvedAgent = provenance?.agentName ?? agentName ?? agent_name ?? this.#agentName;
+          const resolvedPriority = provenance?.priority ?? priority;
           const resolvedVerify = verifyBeforeSend ?? verify_before_send;
+          const resolvedAllowDup = allowDuplicate ?? allow_duplicate ?? bypassLoopBreaker ?? bypass_loop_breaker;
+          const resolvedCooldown = crossAgentCooldown ?? cross_agent_cooldown;
+          const resolvedTicketAware = ticketAware ?? ticket_aware;
           return {
             ...rest,
             ...(resolvedChannel ? { channel: resolvedChannel } : {}),
             ...(resolvedSource ? { source: resolvedSource } : {}),
             ...(resolvedAgent ? { agent_name: resolvedAgent } : {}),
+            ...(resolvedPriority ? { priority: resolvedPriority } : {}),
+            ...(provenance ? { provenance } : {}),
             ...(typeof resolvedVerify === 'boolean' ? { verify_before_send: resolvedVerify } : {}),
             ...(typeof marketing === 'boolean' ? { marketing } : {}),
+            ...(typeof resolvedAllowDup === 'boolean' ? { allow_duplicate: resolvedAllowDup } : {}),
+            ...(typeof dlp === 'boolean' ? { dlp } : {}),
+            ...(resolvedCooldown !== undefined ? { cross_agent_cooldown: resolvedCooldown } : {}),
+            ...(typeof resolvedTicketAware === 'boolean' ? { ticket_aware: resolvedTicketAware } : {}),
             to: Array.isArray(rest.to) ? rest.to : [rest.to],
             scheduledAt: rest.scheduledAt instanceof Date ? rest.scheduledAt.toISOString() : rest.scheduledAt,
           };
@@ -524,6 +841,7 @@ export class SadaSend {
       agent_name?: string;
       limit?: number;
       cursor?: string;
+      offset?: number;
     } = {}) => {
       const { agentName, agent_name, ...rest } = params;
       const r = await this.#request<{ messages: Message[]; total?: number; nextCursor: string | null }>(
@@ -607,16 +925,106 @@ export class SadaSend {
       this.#request<BatchVerificationResult>('POST', '/tools/verify/batch', { body: { emails } }),
   };
 
-  readonly billing = {
-    creditsCheckout: (input: CreditsCheckoutInput) =>
-      this.#request<CreditsCheckoutResult>('POST', '/billing/credits/checkout', { body: input }),
-  };
-
   readonly webhooks = {
     list: () => this.#request<{ webhooks: WebhookEndpoint[] }>('GET', '/webhooks'),
     deliveries: (id: string, params: { limit?: number; event?: string } = {}) =>
       this.#request<{ deliveries: WebhookDelivery[] }>(
         'GET', `/webhooks/${encodeURIComponent(id)}/deliveries${query(params)}`),
+  };
+
+  readonly inbound = {
+    routes: {
+      list: () => this.#request<{ routes: InboundRoute[]; count: number }>('GET', '/inbound/routes'),
+      create: (input: InboundRouteInput) =>
+        this.#request<{ ok: boolean; route: InboundRoute }>('POST', '/inbound/routes', { body: input }),
+      get: (id: string) =>
+        this.#request<{ ok: boolean; route: InboundRoute }>('GET', `/inbound/routes/${encodeURIComponent(id)}`),
+      update: (id: string, input: Partial<InboundRouteInput>) =>
+        this.#request<{ ok: boolean; route: InboundRoute }>('PATCH', `/inbound/routes/${encodeURIComponent(id)}`, { body: input }),
+      delete: (id: string) =>
+        this.#request<{ ok: boolean; id: string; deleted: boolean }>('DELETE', `/inbound/routes/${encodeURIComponent(id)}`),
+    },
+    messages: {
+      list: (params: { routeId?: string; limit?: number; offset?: number } = {}) =>
+        this.#request<{ messages: InboundMessageSummary[]; count: number }>('GET', `/inbound/messages${query(params)}`),
+      get: (id: string) =>
+        this.#request<{ ok: boolean; message: any }>('GET', `/inbound/messages/${encodeURIComponent(id)}`),
+    },
+    parse: (input: InboundParseInput) =>
+      this.#request<InboundParseResult>('POST', '/inbound/parse', { body: input }),
+    simulate: (recipient: string) =>
+      this.#request<InboundSimulateResult>('POST', '/inbound/simulate', { body: { recipient } }),
+  };
+
+  readonly dmarc = {
+    reports: {
+      list: (params: { domain?: string; limit?: number; offset?: number } = {}) =>
+        this.#request<{ reports: DmarcReportSummary[]; count: number }>('GET', `/dmarc/reports${query(params)}`),
+      create: (body: string | Record<string, unknown>) =>
+        this.#request<{ ok: boolean; id: string }>('POST', '/dmarc/reports', { body: typeof body === 'string' ? { xml: body } : body }),
+      get: (id: string) =>
+        this.#request<{ ok: boolean; report: any }>('GET', `/dmarc/reports/${encodeURIComponent(id)}`),
+    },
+    summary: (domain: string) =>
+      this.#request<DmarcDomainSummary>('GET', `/dmarc/domains/${encodeURIComponent(domain)}/summary`),
+    threats: () =>
+      this.#request<{ ok: boolean; threats: DmarcThreat[] }>('GET', '/dmarc/threats'),
+  };
+
+  readonly arbiter = {
+    stats: () => this.#request<ArbiterStats>('GET', '/arbiter/stats'),
+    cooldowns: {
+      set: (recipient: string, durationSeconds: number, reason?: string) =>
+        this.#request<CooldownResult>('POST', `/arbiter/recipients/${encodeURIComponent(recipient)}/cooldown`, {
+          body: { durationSeconds, reason },
+        }),
+      clear: (recipient: string) =>
+        this.#request<{ ok: boolean; recipient: string; cleared: boolean }>(
+          'DELETE', `/arbiter/recipients/${encodeURIComponent(recipient)}/cooldown`),
+      status: (recipient: string) =>
+        this.#request<CooldownStatus>('GET', `/arbiter/recipients/${encodeURIComponent(recipient)}/status`),
+    },
+    tickets: {
+      create: (recipient: string, reason?: string) =>
+        this.#request<{ ok: boolean; recipient: string; ticketId: string }>('POST', '/arbiter/tickets', { body: { recipient, reason } }),
+      delete: (recipient: string) =>
+        this.#request<{ ok: boolean; recipient: string; resolved: boolean }>('DELETE', `/arbiter/tickets/${encodeURIComponent(recipient)}`),
+    },
+  };
+
+  readonly inboxes = {
+    list: () => this.#request<{ ok: boolean; inboxes: EphemeralInbox[]; count: number }>('GET', '/inboxes'),
+    get: (id: string) => this.#request<{ ok: boolean; inbox: EphemeralInbox }>('GET', `/inboxes/${encodeURIComponent(id)}`),
+    delete: (id: string) => this.#request<{ ok: boolean; id: string; deleted: boolean }>('DELETE', `/inboxes/${encodeURIComponent(id)}`),
+    create: (options: EphemeralInboxCreateInput = {}) =>
+      this.#request<{ ok: boolean; inbox: EphemeralInbox }>('POST', '/inboxes/ephemeral', { body: options }),
+    createEphemeral: (options: EphemeralInboxCreateInput = {}) =>
+      this.#request<{ ok: boolean; inbox: EphemeralInbox }>('POST', '/inboxes/ephemeral', { body: options }),
+    otp: (id: string, params: { waitFor?: boolean; timeoutMs?: number; since?: string } = {}) =>
+      this.#request<InboxOtpResult>('GET', `/inboxes/${encodeURIComponent(id)}/otp${query(params)}`),
+    messages: (id: string) =>
+      this.#request<{ ok: boolean; messages: InboxMessage[] }>('GET', `/inboxes/${encodeURIComponent(id)}/messages`),
+    stream: (id: string) =>
+      this.#request<{ ok: boolean; url: string }>('GET', `/inboxes/${encodeURIComponent(id)}/stream`),
+    inbound: (input: { to: string; from?: string; subject?: string; text?: string; html?: string }) =>
+      this.#request<{ ok: boolean; otp?: string; magicLink?: string }>('POST', '/inboxes/inbound', { body: input }),
+  };
+
+  readonly testing = {
+    inbound: (input: TestingInboundInput) =>
+      this.#request<{ ok: boolean; status: string; id: string }>('POST', '/testing/inbound', { body: input }),
+    waitForCode: (input: WaitForCodeInput) =>
+      this.#request<WaitForCodeResult>('POST', '/testing/wait-for-code', { body: input }),
+    inboxes: {
+      code: (email: string) =>
+        this.#request<{ ok: boolean; code: string }>('GET', `/testing/inboxes/${encodeURIComponent(email)}/code`),
+      latest: (email: string) =>
+        this.#request<{ ok: boolean; message: any }>('GET', `/testing/inboxes/${encodeURIComponent(email)}/latest`),
+    },
+  };
+
+  readonly integrations = {
+    slack: () => this.#request<SlackIntegrationStatus>('GET', '/integrations/slack'),
   };
 
   /* ------------------------------------------------------------ transport */

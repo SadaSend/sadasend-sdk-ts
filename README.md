@@ -29,7 +29,11 @@ The official TypeScript and JavaScript SDK for [SadaSend](https://sadasend.com).
   - [8. API Key Governance & Approvals Queue (`keys`)](#8-api-key-governance--approvals-queue-keys)
   - [9. Real-Time Deliverability Verification & Shield (`tools.verify`, `verifyBeforeSend`)](#9-real-time-deliverability-verification--shield-toolsverify-verifybeforesend)
   - [10. Standardized UTM Campaign URL Tagging (`tools.buildUtm`)](#10-standardized-utm-campaign-url-tagging-toolsbuildutm)
-  - [11. Prepaid Credit Packs & Paddle Checkout (`billing.creditsCheckout`)](#11-prepaid-credit-packs--paddle-checkout-billingcreditscheckout)
+  - [11. Inbound MX Routing & Context-Safe Parser (`inbound`)](#11-inbound-mx-routing--context-safe-parser-inbound)
+  - [12. DMARC Deliverability Radar (`dmarc`)](#12-dmarc-deliverability-radar-dmarc)
+  - [13. Multi-Agent Collision Arbiter (`arbiter`)](#13-multi-agent-collision-arbiter-arbiter)
+  - [14. Ephemeral Inboxes & Reactive 2FA OTP Stream (`inboxes`)](#14-ephemeral-inboxes--reactive-2fa-otp-stream-inboxes)
+  - [15. E2E Sandbox Testing (`testing`)](#15-e2e-sandbox-testing-testing)
 - [Timing-Safe HMAC Webhook Verification](#timing-safe-hmac-webhook-verification)
 - [Error Handling: Discriminated Unions](#error-handling-discriminated-unions)
 - [Native Model Context Protocol (MCP) Integration](#native-model-context-protocol-mcp-integration)
@@ -126,7 +130,7 @@ console.log(result.status, result.id);
 
 *Note: The code above is an active integration test verified against a live server in CI via [`examples/ten-lines.ts`](./examples/ten-lines.ts).*
 
-For an executable walkthrough covering all 19 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
+For an executable walkthrough covering all 18 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
 
 ---
 
@@ -198,14 +202,14 @@ Send rich transactional emails with attachments, tags, custom metadata, CC/BCC, 
 
 ```ts
 const res = await sadasend.emails.send({
-  from: 'Billing Team <billing@yourdomain.com>',
+  from: 'Finance Team <finance@yourdomain.com>',
   to: ['customer@example.com'],
-  cc: ['finance@yourdomain.com'],
+  cc: ['accounting@yourdomain.com'],
   replyTo: 'support@yourdomain.com',
   subject: 'Invoice #INV-2026-10',
   html: '<h1>Your Invoice is Attached</h1><p>Thank you for your business!</p>',
   text: 'Your Invoice is Attached. Thank you for your business!',
-  tags: ['billing', 'october-invoices'],
+  tags: ['finance', 'october-invoices'],
   headers: {
     'X-Entity-ID': 'cust_98124',
   },
@@ -419,25 +423,103 @@ const tagged = await sadasend.tools.buildUtm({
 });
 
 if (tagged.ok) {
-  console.log('Normalized URL:', tagged.data.url);
+  console.log('Normalized URL:', tagged.data.tagged);
   // Preserves existing query params and hash anchor (#pricing)
 }
 ```
 
-### 11. Prepaid Credit Packs & Paddle Checkout (`billing.creditsCheckout`)
+### 11. Inbound MX Routing & Context-Safe Parser (`inbound`)
 
-Initialize a one-time Paddle checkout transaction for prepaid verification or sending credit packs:
+Configure inbound MX routes and parse incoming emails into token-optimized Markdown with built-in prompt-injection scoring:
 
 ```ts
-const checkout = await sadasend.billing.creditsCheckout({
-  type: 'verify',      // 'verify' | 'send'
-  pack: '25k',         // '5k' | '25k' | '100k' | '500k' for verify; '10k' | '50k' | '100k' for send
-  returnUrl: 'https://yourdomain.com/dashboard/billing',
+// 1. Manage Inbound Routes
+await sadasend.inbound.routes.create({
+  pattern: '*@inbound.yourdomain.com',
+  targetUrl: 'https://yourdomain.com/api/webhooks/inbound',
+  description: 'AI Support Desk Route',
 });
 
-if (checkout.ok) {
-  console.log('Transaction ID:', checkout.data.transactionId);
-  console.log('Paddle Checkout URL:', checkout.data.checkoutUrl);
+// 2. Parse Incoming Emails with Anti-Injection Defense
+const parsed = await sadasend.inbound.parse({
+  subject: 'Re: Account Access',
+  text: 'Hello, please verify my account.\n\n> Quoted text from earlier...',
+});
+
+if (parsed.ok) {
+  console.log('Cleaned Markdown (tokens preserved):', parsed.data.content.cleanMarkdown);
+  console.log('Prompt Injection Risk Score:', parsed.data.security.injectionRiskScore);
+  if (parsed.data.security.quarantineRecommended) {
+    console.warn('Quarantine recommended: malicious payload detected.');
+  }
+}
+```
+
+### 12. DMARC Deliverability Radar (`dmarc`)
+
+Upload RFC 7489 aggregate feedback reports and inspect SPF/DKIM alignment scores:
+
+```ts
+// Get domain deliverability summary & policy upgrade guidance
+const summary = await sadasend.dmarc.summary('yourdomain.com');
+if (summary.ok) {
+  console.log('DKIM Alignment:', summary.data.dkimAlignmentPct + '%');
+  console.log('Current Policy:', summary.data.currentPolicy);
+  console.log('Recommended Policy:', summary.data.recommendedPolicy);
+}
+```
+
+### 13. Multi-Agent Collision Arbiter (`arbiter`)
+
+Enforce cross-agent quiet periods so multiple autonomous bots never message the same recipient simultaneously:
+
+```ts
+// Set a 24-hour cooldown for a customer
+await sadasend.arbiter.cooldowns.set('lead@enterprise.com', 86400, 'Sales agent outreach completed');
+
+// Inspect recipient status
+const status = await sadasend.arbiter.cooldowns.status('lead@enterprise.com');
+if (status.ok) {
+  console.log('Cooldown active:', status.data.cooldownActive);
+}
+```
+
+### 14. Ephemeral Inboxes & Reactive 2FA OTP Stream (`inboxes`)
+
+Provision sub-10ms temporary inboxes for browser-agent automation (Playwright, Puppeteer, Stagehand) and capture verification codes without polling loops:
+
+```ts
+// 1. Provision ephemeral inbox (10 min TTL)
+const inbox = await sadasend.inboxes.create({ ttlSeconds: 600, alias: 'pw-agent' });
+if (inbox.ok) {
+  console.log('Agent Email:', inbox.data.inbox.email);
+
+  // 2. Wait for incoming OTP code
+  const otp = await sadasend.inboxes.otp(inbox.data.inbox.id, { waitFor: true, timeoutMs: 15000 });
+  if (otp.ok) {
+    console.log('Extracted OTP Code:', otp.data.code);
+  }
+}
+```
+
+### 15. E2E Sandbox Testing (`testing`)
+
+Simulate inbound deliveries and assert OTP codes in automated CI/CD pipelines:
+
+```ts
+await sadasend.testing.inbound({
+  to: 'agent@test.sadasend.com',
+  from: 'auth@service.com',
+  subject: 'Your code',
+  text: 'Your verification code is 849201',
+});
+
+const code = await sadasend.testing.waitForCode({
+  to: 'agent@test.sadasend.com',
+  timeoutMs: 5000,
+});
+if (code.ok) {
+  console.log('Verified Code:', code.data.code);
 }
 ```
 

@@ -19,7 +19,7 @@ const res = await sadasend.emails.send({
   text?: 'Plain text body',
   template?: 'tmpl_123',         // Server-side liquid template
   variables?: { name: 'Alice' },
-  tags?: ['billing', 'october'],
+  tags?: ['finance', 'october'],
   headers?: { 'X-Entity-ID': 'inv_99' },
   attachments?: [{ filename: 'receipt.pdf', content: base64Data, contentType: 'application/pdf' }],
   scheduledAt?: new Date(Date.now() + 3600000), // Future delivery
@@ -34,7 +34,14 @@ const res = await sadasend.emails.send({
   idempotencyKey?: 'order-1234', // Custom domain key (auto-generated if omitted)
   channel?: 'sdk',
   source?: 'agent',
-  agentName?: 'billing-bot',
+  agentName: 'finance-bot',
+  // Advanced Agent Safety Options (v0.1.2)
+  allowDuplicate?: false,        // Enforce anti-loop duplication breaker
+  bypassLoopBreaker?: false,     // Emergency manual override
+  crossAgentCooldown?: true,     // Respect multi-agent recipient quiet periods
+  dlp?: true,                    // Redact sensitive PII / API keys before send
+  priority?: 'normal',           // 'low' | 'normal' | 'high' | 'urgent'
+  ticketAware?: true,            // Thread message to existing support ticket
 });
 
 // Retrieve message status & event trail
@@ -50,7 +57,7 @@ const cancelled = await sadasend.emails.cancel('msg_123');
 // List recent emails with filters
 const list = await sadasend.emails.list({
   limit: 20,
-  agentName: 'billing-bot',
+  agentName: 'finance-bot',
   status: 'delivered', // 'queued' | 'sent' | 'delivered' | 'bounced' | 'complained' | 'pending_approval'
   q: 'invoice',
 });
@@ -156,19 +163,109 @@ const utm = await sadasend.tools.buildUtm({
   medium: 'email',
   campaign: 'q4_launch',
 });
-// utm.data: { url: 'https://domain.com/launch?utm_source=newsletter&utm_medium=email&utm_campaign=q4_launch#pricing', params: { ... } }
+// utm.data: { original: 'https://domain.com/launch#pricing', tagged: 'https://domain.com/launch?utm_source=newsletter&utm_medium=email&utm_campaign=q4_launch#pricing', params: { ... } }
 ```
 
 ---
 
-## 8. Billing & Prepaid Credit Packs
+## 8. Inbound MX Routing & Context-Safe Parser
 
 ```ts
-// Initialize one-time Paddle checkout for credit packs
-const checkout = await sadasend.billing.creditsCheckout({
-  type: 'verify', // 'verify' | 'send'
-  pack: '25k',    // '5k' | '25k' | '100k' | '500k' for verify; '10k' | '50k' | '100k' for send
-  returnUrl: 'https://domain.com/dashboard/billing',
+// List and configure inbound MX routing rules
+const routes = await sadasend.inbound.routes.list();
+const created = await sadasend.inbound.routes.create({
+  pattern: '*@inbound.yourdomain.com',
+  targetUrl: 'https://api.yourdomain.com/webhooks/inbound',
+  description: 'AI Support Desk Route',
 });
-// checkout.data: { checkoutUrl: 'https://checkout.paddle.com/...', transactionId: '...', pack: '25k', credits: 25000 }
+
+// Parse inbound payload with prompt-injection defense
+const parsed = await sadasend.inbound.parse({
+  subject: 'Re: Inquiry',
+  text: 'Hello, please reset my account.\n\n> Quoted text',
+});
+// parsed.data: { content: { cleanMarkdown, tokensPreserved }, security: { injectionRiskScore, quarantineRecommended } }
+```
+
+---
+
+## 9. DMARC Deliverability Radar
+
+```ts
+// Query domain alignment scores and policy upgrade recommendations
+const dmarcSummary = await sadasend.dmarc.summary('yourdomain.com');
+// dmarcSummary.data: { dkimAlignmentPct, spfAlignmentPct, currentPolicy, recommendedPolicy }
+
+// Upload aggregate XML feedback report
+const uploaded = await sadasend.dmarc.reports.upload(xmlReportString);
+```
+
+---
+
+## 10. Multi-Agent Collision Arbiter
+
+```ts
+// Set cooldown to prevent cross-agent recipient spam
+await sadasend.arbiter.cooldowns.set('lead@enterprise.com', 86400, 'Sales outreach completed');
+
+// Check recipient collision status
+const status = await sadasend.arbiter.cooldowns.status('lead@enterprise.com');
+// status.data: { cooldownActive: boolean, remainingSeconds: number }
+```
+
+---
+
+## 11. Ephemeral Inboxes & Reactive 2FA OTP Stream
+
+```ts
+// Provision temporary mailbox for browser automation agents (Playwright, Puppeteer)
+const inbox = await sadasend.inboxes.create({ ttlSeconds: 600, alias: 'agent-auth' });
+// inbox.data: { inbox: { id, email, expiresAt } }
+
+// Capture incoming OTP verification code (without polling loops)
+const otp = await sadasend.inboxes.otp(inbox.data.inbox.id, { waitFor: true, timeoutMs: 15000 });
+// otp.data: { code: '849201', extractedAt: '...' }
+```
+
+---
+
+## 12. E2E Sandbox Testing
+
+```ts
+// Simulate inbound email arrival in automated CI tests
+await sadasend.testing.inbound({
+  to: 'agent@test.sadasend.com',
+  from: 'auth@service.com',
+  subject: 'Your code',
+  text: 'Your verification code is 849201',
+});
+
+// Await OTP code verification in test assertions
+const code = await sadasend.testing.waitForCode({
+  to: 'agent@test.sadasend.com',
+  timeoutMs: 5000,
+});
+// code.data: { code: '849201' }
+```
+
+---
+
+## 13. Webhooks Cryptographic Verification
+
+```ts
+import { verifyWebhook, parseWebhook } from 'sadasend/webhooks';
+
+// Timing-safe constant-time WebCrypto HMAC-SHA256 signature evaluation
+const isValid = await verifyWebhook(
+  process.env.SADASEND_WEBHOOK_SECRET!,
+  rawBodyString,
+  req.headers.get('sadasend-signature')!
+);
+
+const event = await parseWebhook(
+  process.env.SADASEND_WEBHOOK_SECRET!,
+  rawBodyString,
+  req.headers.get('sadasend-signature')!
+);
+// event: { id, type: 'email.delivered' | 'email.bounced' | 'email.complained', data: { messageId, ... } }
 ```

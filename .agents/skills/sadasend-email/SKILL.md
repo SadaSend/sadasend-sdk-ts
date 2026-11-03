@@ -31,7 +31,7 @@ Unlike legacy email APIs that blindly dispatch emails or crash via exceptions, S
 3. **Use Safe Preflight Dry Runs (`dryRun: true`):**
    Before dispatching a sensitive or bulk email, run with `dryRun: true`. This validates domain verification, allowlists, syntax, and suppressions at zero cost without emailing external users or burning quota.
 4. **Always Provide Agent Provenance:**
-   Tag all client instances with `agentName` (e.g. `billing-agent`, `customer-support-bot`) so administrators can trace email velocity and logs directly back to your persona.
+   Tag all client instances with `agentName` (e.g. `triage-agent`, `customer-support-bot`) so administrators can trace email velocity and logs directly back to your persona.
 5. **Always Use Idempotency Keys Across Multi-Step Workflows:**
    Pass `idempotencyKey: 'task-<id>'` to prevent accidental duplicate deliveries during retries, network glitches, or agent loop restarts.
 6. **Enable Deliverability Shield (`verifyBeforeSend: true`):**

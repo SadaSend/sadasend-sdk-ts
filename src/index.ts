@@ -11,11 +11,16 @@ export { SadaSend } from "./client.js";
 export type {
   AccountChecklist, AccountInfo, AccountStats, AccountVolume, AccountVolumeDay,
   ApiKeySummary, Attachment, BatchItemResult, BatchResult, BatchVerificationResult,
-  ChecklistItem, CircuitBreaker, ClientOptions, CreditsCheckoutInput, CreditsCheckoutResult,
-  DeliverabilityTool, HeldApproval, Message, MessageStatus, Result, SendInput,
+  ChecklistItem, CircuitBreaker, ClientOptions,
+  DeliverabilityTool, HeldApproval, Message, MessageStatus, MessageProvenance, Result, SendInput,
   SendResult, StaffAccess, SupportTicketSummary, TeamMember, TemplateDetail,
   TemplateSummary, VerificationCheckResult, VerificationResult,
   UtmBuildInput, UtmBuildResult, UtmOptions, WebhookDelivery, WebhookEndpoint,
+  InboundRoute, InboundRouteInput, InboundMessageSummary, InboundParseInput, InboundParseResult,
+  InboundSimulateResult, DmarcReportSummary, DmarcDomainSummary, DmarcThreat,
+  ArbiterStats, CooldownResult, CooldownStatus, EphemeralInbox, EphemeralInboxCreateInput,
+  InboxOtpResult, InboxMessage, TestingInboundInput, WaitForCodeInput, WaitForCodeResult,
+  SlackIntegrationStatus,
 } from "./client.js";
 
 export {

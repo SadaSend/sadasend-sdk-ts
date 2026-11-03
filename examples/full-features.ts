@@ -20,7 +20,6 @@
  * 16. Webhook constant-time HMAC-SHA256 signature verification & event parsing
  * 17. Real-time deliverability verification & shield (`tools.verify`, `tools.verifyBatch`)
  * 18. Standardized UTM campaign URL tagging (`tools.buildUtm`)
- * 19. Prepaid credit pack Paddle checkout (`billing.creditsCheckout`)
  *
  * Run this example:
  *   SADASEND_API_KEY="sada_live_sk_..." bun run examples/full-features.ts
@@ -67,7 +66,7 @@ const sadasend = new SadaSend(API_KEY, {
   // Default ingress channel and agent attribution across all sends from this client
   channel: 'sdk',
   source: 'agent',
-  agentName: 'billing-bot',
+  agentName: 'finance-bot',
 });
 console.log(`Initialized SadaSend client targeting: ${BASE_URL}`);
 
@@ -190,7 +189,7 @@ const sendResult = await sadasend.emails.send({
     </div>
   `,
   text: 'Invoice #INV-2026-08. Thank you for your business. Your receipt is attached.',
-  tags: ['billing', 'invoices', 'august'],
+  tags: ['finance', 'invoices', 'august'],
   headers: {
     'X-Entity-Ref-ID': 'invoice-2026-08',
   },
@@ -462,20 +461,6 @@ const utmResult = await sadasend.tools.buildUtm({
 if (utmResult.ok) {
   console.log(`Tagged URL: ${utmResult.data.tagged}`);
   console.log(`UTM Source: ${utmResult.data.params.utm_source} | Campaign: ${utmResult.data.params.utm_campaign}`);
-}
-
-// ---------------------------------------------------------------------------
-// 19. Prepaid Credit Pack Checkout
-// ---------------------------------------------------------------------------
-console.log('\n--- 19. Prepaid Credit Pack Checkout ---');
-const checkout = await sadasend.billing.creditsCheckout({
-  type: 'verify',
-  pack: '25k',
-  returnUrl: 'https://app.sadasend.com/billing',
-});
-
-if (checkout.ok) {
-  console.log(`Initialized Paddle Checkout: ${checkout.data.checkoutUrl} (Transaction ID: ${checkout.data.transactionId})`);
 }
 
 console.log('\n=== SadaSend TypeScript SDK Demo Completed Successfully ===\n');
