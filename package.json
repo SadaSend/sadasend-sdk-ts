@@ -1,6 +1,6 @@
 {
   "name": "sadasend",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Official TypeScript/JavaScript SDK for SadaSend. Transactional email with unbypassable server-enforced guardrails for human engineers and autonomous AI agents (Claude, Cursor, MCP). Zero dependencies, native fetch & WebCrypto, automatic idempotency, and constant-time webhook verification.",
   "type": "module",
   "main": "./dist/index.js",
@@ -13,6 +13,10 @@
     "./webhooks": {
       "types": "./dist/webhooks.d.ts",
       "default": "./dist/webhooks.js"
+    },
+    "./playwright": {
+      "types": "./dist/playwright.d.ts",
+      "default": "./dist/playwright.js"
     }
   },
   "files": [
@@ -61,6 +65,7 @@
     "typescript"
   ],
   "devDependencies": {
+    "@playwright/test": "^1.48.0",
     "@types/bun": "^1.2.0",
     "typescript": "^5.7.0"
   },

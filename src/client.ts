@@ -91,12 +91,39 @@ export type BatchVerificationResult = {
   results: VerificationResult[];
 };
 
+export type ReactEmailElement =
+  | { type: unknown; props: unknown; key?: unknown }
+  | Record<string, unknown>
+  | unknown;
+
+export type RenderedEmail = {
+  html: string;
+  text?: string;
+};
+
+export type ReactEmailRenderOptions = {
+  plainText?: boolean;
+  pretty?: boolean;
+  renderer?: (
+    element: unknown,
+    options?: { plainText?: boolean; pretty?: boolean },
+  ) => Promise<RenderedEmail> | RenderedEmail;
+};
+
 export type SendInput = {
   from: string;
   to: string | string[];
   subject?: string;
   html?: string;
   text?: string;
+  /**
+   * First-class React Email component (e.g. `<WelcomeEmail />`).
+   * Automatically rendered to HTML (and plain-text if `text` is omitted)
+   * via `@react-email/render` or `react-dom/server`.
+   */
+  react?: ReactEmailElement;
+  /** Optional custom renderer options for React Email components. */
+  reactRenderOptions?: ReactEmailRenderOptions;
   /** Template name or id, rendered server-side with `variables`. */
   template?: string;
   variables?: Record<string, unknown>;
@@ -601,8 +628,48 @@ export type WaitForCodeInput = {
 export type WaitForCodeResult = {
   ok: boolean;
   code: string;
+  otp?: string | null;
   magicLink?: string | null;
+  allOtps?: string[];
+  allMagicLinks?: string[];
   messageId?: string;
+  to?: string;
+  subject?: string;
+  receivedAt?: string;
+};
+
+export type InboxStreamConnectedEvent = {
+  event: 'connected';
+  data: { ok: boolean; inboxId: string; email: string; expiresAt: string };
+};
+
+export type InboxStreamOtpEvent = {
+  event: 'otp';
+  data: { inboxId: string; otp: string; code?: string; magicLink?: string | null; receivedAt: string };
+};
+
+export type InboxStreamMessageEvent = {
+  event: 'message';
+  data: InboxMessage;
+};
+
+export type InboxStreamHeartbeatEvent = {
+  event: 'heartbeat';
+  data: { timestamp: number };
+};
+
+export type InboxStreamEvent =
+  | InboxStreamConnectedEvent
+  | InboxStreamOtpEvent
+  | InboxStreamMessageEvent
+  | InboxStreamHeartbeatEvent
+  | { event: string; data: unknown };
+
+export type InboxStreamResponse = {
+  url: string;
+  response: Response;
+  body: ReadableStream<Uint8Array> | null;
+  [Symbol.asyncIterator]: () => AsyncGenerator<InboxStreamEvent>;
 };
 
 export type SlackIntegrationStatus = {
@@ -639,7 +706,7 @@ export type ClientOptions = {
   agentName?: string;
 };
 
-const VERSION = '0.1.2';
+const VERSION = '0.1.4';
 
 /**
  * `process.env`, read without assuming it exists.
@@ -702,6 +769,8 @@ export class SadaSend {
   readonly emails = {
     send: async (input: SendInput): Promise<SendResult> => {
       const {
+        react,
+        reactRenderOptions,
         idempotencyKey,
         channel,
         source,
@@ -733,6 +802,20 @@ export class SadaSend {
       const resolvedCooldown = crossAgentCooldown ?? cross_agent_cooldown;
       const resolvedTicketAware = ticketAware ?? ticket_aware;
 
+      let resolvedHtml = rest.html;
+      let resolvedText = rest.text;
+
+      if (!resolvedHtml && react) {
+        const rendered = await renderReactEmail(react, {
+          plainText: !resolvedText,
+          ...reactRenderOptions,
+        });
+        resolvedHtml = rendered.html;
+        if (!resolvedText && rendered.text) {
+          resolvedText = rendered.text;
+        }
+      }
+
       const outgoingHeaders: Record<string, string> = { ...(headers ?? {}) };
       if (resolvedAgent) outgoingHeaders['x-sadasend-agent'] = resolvedAgent;
       if (resolvedSource) outgoingHeaders['x-sadasend-source'] = resolvedSource;
@@ -743,6 +826,8 @@ export class SadaSend {
         headers: outgoingHeaders,
         body: {
           ...rest,
+          ...(resolvedHtml ? { html: resolvedHtml } : {}),
+          ...(resolvedText ? { text: resolvedText } : {}),
           ...(resolvedChannel ? { channel: resolvedChannel } : {}),
           ...(resolvedSource ? { source: resolvedSource } : {}),
           ...(resolvedAgent ? { agent_name: resolvedAgent } : {}),
@@ -767,9 +852,11 @@ export class SadaSend {
       items: SendInput[],
       options: { idempotencyKey?: string } = {},
     ): Promise<Result<BatchResult>> => {
-      const body = {
-        emails: items.map((item) => {
+      const emails = await Promise.all(
+        items.map(async (item) => {
           const {
+            react,
+            reactRenderOptions,
             idempotencyKey,
             channel,
             source,
@@ -799,8 +886,25 @@ export class SadaSend {
           const resolvedAllowDup = allowDuplicate ?? allow_duplicate ?? bypassLoopBreaker ?? bypass_loop_breaker;
           const resolvedCooldown = crossAgentCooldown ?? cross_agent_cooldown;
           const resolvedTicketAware = ticketAware ?? ticket_aware;
+
+          let resolvedHtml = rest.html;
+          let resolvedText = rest.text;
+
+          if (!resolvedHtml && react) {
+            const rendered = await renderReactEmail(react, {
+              plainText: !resolvedText,
+              ...reactRenderOptions,
+            });
+            resolvedHtml = rendered.html;
+            if (!resolvedText && rendered.text) {
+              resolvedText = rendered.text;
+            }
+          }
+
           return {
             ...rest,
+            ...(resolvedHtml ? { html: resolvedHtml } : {}),
+            ...(resolvedText ? { text: resolvedText } : {}),
             ...(resolvedChannel ? { channel: resolvedChannel } : {}),
             ...(resolvedSource ? { source: resolvedSource } : {}),
             ...(resolvedAgent ? { agent_name: resolvedAgent } : {}),
@@ -816,9 +920,9 @@ export class SadaSend {
             scheduledAt: rest.scheduledAt instanceof Date ? rest.scheduledAt.toISOString() : rest.scheduledAt,
           };
         }),
-      };
+      );
       return this.#request<BatchResult>('POST', '/emails/batch', {
-        body,
+        body: { emails },
         idempotencyKey: options.idempotencyKey ?? crypto.randomUUID(),
       });
     },
@@ -1006,8 +1110,55 @@ export class SadaSend {
       this.#request<InboxOtpResult>('GET', `/inboxes/${encodeURIComponent(id)}/otp${query(params)}`),
     messages: (id: string) =>
       this.#request<{ ok: boolean; messages: InboxMessage[] }>('GET', `/inboxes/${encodeURIComponent(id)}/messages`),
-    stream: (id: string) =>
-      this.#request<{ ok: boolean; url: string }>('GET', `/inboxes/${encodeURIComponent(id)}/stream`),
+    streamUrl: (id: string): string =>
+      `${this.#baseUrl}/inboxes/${encodeURIComponent(id)}/stream`,
+    stream: async (id: string, options?: { signal?: AbortSignal }): Promise<Result<InboxStreamResponse>> => {
+      const url = `${this.#baseUrl}/inboxes/${encodeURIComponent(id)}/stream`;
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${this.#apiKey}`,
+        'user-agent': `sadasend-js/${VERSION}`,
+        accept: 'text/event-stream',
+        ...(this.#agentName ? { 'x-sadasend-agent': this.#agentName } : {}),
+        ...(this.#source ? { 'x-sadasend-source': this.#source } : {}),
+      };
+
+      let response: Response;
+      try {
+        response = await this.#fetch(url, {
+          method: 'GET',
+          headers,
+          signal: options?.signal,
+        });
+      } catch (cause) {
+        throw new ConnectionError(
+          `Could not reach ${this.#baseUrl} for SSE stream after 1 attempt.`,
+          cause,
+          1,
+        );
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        const body = parseJson(text);
+        const error = toError(response.status, body, retryAfterSeconds(response));
+        return { ok: false, error };
+      }
+
+      const body = response.body;
+      const data: InboxStreamResponse = {
+        url,
+        response,
+        body,
+        [Symbol.asyncIterator]: () => {
+          if (!body) {
+            return (async function* () {})();
+          }
+          return parseSseStream(body);
+        },
+      };
+
+      return { ok: true, data };
+    },
     inbound: (input: { to: string; from?: string; subject?: string; text?: string; html?: string }) =>
       this.#request<{ ok: boolean; otp?: string; magicLink?: string }>('POST', '/inboxes/inbound', { body: input }),
   };
@@ -1015,11 +1166,37 @@ export class SadaSend {
   readonly testing = {
     inbound: (input: TestingInboundInput) =>
       this.#request<{ ok: boolean; status: string; id: string }>('POST', '/testing/inbound', { body: input }),
-    waitForCode: (input: WaitForCodeInput) =>
-      this.#request<WaitForCodeResult>('POST', '/testing/wait-for-code', { body: input }),
+    waitForCode: async (input: WaitForCodeInput): Promise<Result<WaitForCodeResult>> => {
+      const r = await this.#request<WaitForCodeResult>('POST', '/testing/wait-for-code', { body: input });
+      if (!r.ok) return r;
+      const d = r.data as any;
+      const code = String(d.code ?? d.otp ?? '');
+      const otp = d.otp ?? d.code ?? null;
+      return {
+        ok: true,
+        data: {
+          ...d,
+          code,
+          otp,
+        },
+      };
+    },
     inboxes: {
-      code: (email: string) =>
-        this.#request<{ ok: boolean; code: string }>('GET', `/testing/inboxes/${encodeURIComponent(email)}/code`),
+      code: async (email: string): Promise<Result<{ ok: boolean; code: string; otp?: string }>> => {
+        const r = await this.#request<{ ok: boolean; code: string; otp?: string }>('GET', `/testing/inboxes/${encodeURIComponent(email)}/code`);
+        if (!r.ok) return r;
+        const d = r.data as any;
+        const code = String(d.code ?? d.otp ?? '');
+        const otp = d.otp ?? d.code ?? undefined;
+        return {
+          ok: true,
+          data: {
+            ...d,
+            code,
+            otp,
+          },
+        };
+      },
       latest: (email: string) =>
         this.#request<{ ok: boolean; message: any }>('GET', `/testing/inboxes/${encodeURIComponent(email)}/latest`),
     },
@@ -1139,4 +1316,200 @@ function query(params: Record<string, unknown>): string {
   for (const [k, v] of Object.entries(params)) if (v !== undefined) q.set(k, String(v));
   const s = q.toString();
   return s ? `?${s}` : '';
+}
+
+/**
+ * Standard WHATWG Server-Sent Events (SSE) stream parser.
+ *
+ * Runs strictly on native Web streams (`ReadableStream<Uint8Array>`, `TextDecoder`)
+ * with zero third-party dependencies across Node.js 18+, Bun, Deno, Cloudflare Workers,
+ * Next.js Edge, and browser runtimes.
+ */
+export async function* parseSseStream(stream: ReadableStream<Uint8Array>): AsyncGenerator<InboxStreamEvent> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split(/\r\n|\r|\n/);
+      buffer = lines.pop() ?? '';
+
+      let currentEvent = 'message';
+      let dataLines: string[] = [];
+
+      for (const line of lines) {
+        if (line === '') {
+          if (dataLines.length > 0) {
+            const rawData = dataLines.join('\n');
+            let parsedData: unknown = rawData;
+            try {
+              parsedData = JSON.parse(rawData);
+            } catch {}
+            yield { event: currentEvent, data: parsedData } as InboxStreamEvent;
+            currentEvent = 'message';
+            dataLines = [];
+          }
+          continue;
+        }
+
+        if (line.startsWith(':')) {
+          continue;
+        }
+
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) {
+          continue;
+        }
+
+        const field = line.slice(0, colonIdx).trim();
+        const val = line.slice(colonIdx + 1).replace(/^ /, '');
+
+        if (field === 'event') {
+          currentEvent = val;
+        } else if (field === 'data') {
+          dataLines.push(val);
+        }
+      }
+    }
+
+    if (buffer.trim()) {
+      const lines = buffer.split(/\r\n|\r|\n/);
+      let currentEvent = 'message';
+      let dataLines: string[] = [];
+      for (const line of lines) {
+        if (line.startsWith('event:')) {
+          currentEvent = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).replace(/^ /, ''));
+        }
+      }
+      if (dataLines.length > 0) {
+        const rawData = dataLines.join('\n');
+        let parsedData: unknown = rawData;
+        try {
+          parsedData = JSON.parse(rawData);
+        } catch {}
+        yield { event: currentEvent, data: parsedData } as InboxStreamEvent;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function isModuleNotFoundError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; message?: string };
+  if (e.code === 'ERR_MODULE_NOT_FOUND' || e.code === 'MODULE_NOT_FOUND') {
+    return true;
+  }
+  if (typeof e.message === 'string') {
+    const msg = e.message.toLowerCase();
+    return (
+      msg.includes('cannot find module') ||
+      msg.includes('cannot find package') ||
+      msg.includes('failed to resolve') ||
+      msg.includes('module not found') ||
+      msg.includes('could not resolve')
+    );
+  }
+  return false;
+}
+
+/**
+ * Dynamically renders a React Email component to HTML and plain-text.
+ *
+ * Supports `@react-email/render` (preferred) or `react-dom/server` fallback.
+ * Zero compile-time or runtime dependencies: only loads the renderer if invoked.
+ */
+export async function renderReactEmail(
+  element: ReactEmailElement,
+  options?: ReactEmailRenderOptions,
+): Promise<RenderedEmail> {
+  if (!element) {
+    throw new Error('renderReactEmail requires a valid React Email element');
+  }
+
+  if (typeof options?.renderer === 'function') {
+    const customResult = await options.renderer(element, options);
+    if (!customResult || typeof customResult.html !== 'string') {
+      throw new Error('Custom React Email renderer must return an object with an "html" string property');
+    }
+    return customResult;
+  }
+
+  // 1. Try importing @react-email/render
+  let mod: any = null;
+  const reactEmailPkg = '@react-email/render';
+  try {
+    mod = await import(/* webpackIgnore: true */ /* @vite-ignore */ reactEmailPkg);
+  } catch (err: unknown) {
+    if (!isModuleNotFoundError(err)) {
+      throw err;
+    }
+  }
+
+  if (mod) {
+    const renderFn =
+      typeof mod.renderAsync === 'function'
+        ? mod.renderAsync
+        : typeof mod.render === 'function'
+          ? mod.render
+          : typeof mod.default?.renderAsync === 'function'
+            ? mod.default.renderAsync
+            : typeof mod.default?.render === 'function'
+              ? mod.default.render
+              : null;
+
+    if (renderFn) {
+      const html = await renderFn(element, { pretty: options?.pretty });
+      let text: string | undefined;
+      if (options?.plainText !== false) {
+        try {
+          text = await renderFn(element, { plainText: true });
+        } catch {
+          // Plain-text extraction fallback
+        }
+      }
+      return { html, ...(text ? { text } : {}) };
+    }
+  }
+
+  // 2. Fall back to react-dom/server
+  let domMod: any = null;
+  const reactDomServerPkg = 'react-dom/server';
+  try {
+    domMod = await import(/* webpackIgnore: true */ /* @vite-ignore */ reactDomServerPkg);
+  } catch (err: unknown) {
+    if (!isModuleNotFoundError(err)) {
+      throw err;
+    }
+  }
+
+  if (domMod) {
+    const renderFn =
+      typeof domMod.renderToStaticMarkup === 'function'
+        ? domMod.renderToStaticMarkup
+        : typeof domMod.renderToString === 'function'
+          ? domMod.renderToString
+          : typeof domMod.default?.renderToStaticMarkup === 'function'
+            ? domMod.default.renderToStaticMarkup
+            : typeof domMod.default?.renderToString === 'function'
+              ? domMod.default.renderToString
+              : null;
+
+    if (renderFn) {
+      const html = await renderFn(element);
+      return { html };
+    }
+  }
+
+  throw new Error(
+    "To send emails using the 'react' property, please install '@react-email/render' or 'react-dom': npm install @react-email/render",
+  );
 }

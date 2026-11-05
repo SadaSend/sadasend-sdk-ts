@@ -126,3 +126,18 @@ SadaSend is engineered to prevent autonomous AI agents from hallucinating, leaki
 - **Agent Self-Correction Strategy:**
   1. For batch errors, split items into smaller chunks (<= 100 per request).
   2. For tier errors, notify the human supervisor that plan elevation is required.
+
+---
+
+## 11. Volume Surge Anomaly & Security Hold (`held: true, holdType: 'security'`)
+
+- **Response Status:** `status: 'pending_approval'`, `held: true`
+- **Why It Happens:** The sender or agent triggered the adaptive volume surge detector (projected daily velocity exceeds safety multiplier, e.g. 3x 7-day baseline) or a security hold policy.
+- **Payload Properties:**
+  - `result.held`: `true`
+  - `result.holdType`: `'security'`
+  - `result.holdReason`: Detailed explanation (e.g. *"Volume surge anomaly detected: projected daily volume (3,500) exceeds safety threshold (3,000, 3x 7-day baseline). Held for operator review."*)
+- **Agent Self-Correction Strategy:**
+  1. Do **not** treat this as a failure or network glitch.
+  2. The message has been safely accepted and placed in the Human Approval Queue.
+  3. Inform the user or supervisor that the message is held pending operator review due to the reason in `result.holdReason`.

@@ -17,6 +17,7 @@ const res = await sadasend.emails.send({
   subject: 'Invoice Ready',
   html?: '<p>HTML body</p>',
   text?: 'Plain text body',
+  react?: <WelcomeEmail name="Alice" />, // First-class React Email component
   template?: 'tmpl_123',         // Server-side liquid template
   variables?: { name: 'Alice' },
   tags?: ['finance', 'october'],
@@ -225,6 +226,17 @@ const inbox = await sadasend.inboxes.create({ ttlSeconds: 600, alias: 'agent-aut
 // Capture incoming OTP verification code (without polling loops)
 const otp = await sadasend.inboxes.otp(inbox.data.inbox.id, { waitFor: true, timeoutMs: 15000 });
 // otp.data: { code: '849201', extractedAt: '...' }
+
+// Stream real-time events via native SSE async iterator (<150ms push latency)
+const stream = await sadasend.inboxes.stream(inbox.data.inbox.id);
+if (stream.ok) {
+  for await (const event of stream.data) {
+    if (event.event === 'otp') console.log('OTP received:', event.data);
+  }
+}
+
+// Get absolute stream URL for browsers / webhooks
+const streamEndpoint = sadasend.inboxes.streamUrl(inbox.data.inbox.id);
 ```
 
 ---
@@ -240,12 +252,12 @@ await sadasend.testing.inbound({
   text: 'Your verification code is 849201',
 });
 
-// Await OTP code verification in test assertions
+// Await OTP code verification in test assertions (.code and .otp are aliases)
 const code = await sadasend.testing.waitForCode({
   to: 'agent@test.sadasend.com',
   timeoutMs: 5000,
 });
-// code.data: { code: '849201' }
+// code.data: { code: '849201', otp: '849201' }
 ```
 
 ---
@@ -268,4 +280,36 @@ const event = await parseWebhook(
   req.headers.get('sadasend-signature')!
 );
 // event: { id, type: 'email.delivered' | 'email.bounced' | 'email.complained', data: { messageId, ... } }
+```
+
+---
+
+## 14. First-Class React Email Rendering
+
+```ts
+import { renderReactEmail } from 'sadasend';
+
+// Compile JSX / React component to HTML and plain-text dynamically (0 dependencies)
+const rendered = await renderReactEmail(<WelcomeEmail user="Sarah" />);
+// rendered: { html: '<h1>Welcome Sarah</h1>...', text: 'Welcome Sarah...' }
+```
+
+---
+
+## 15. Official Playwright Drop-in Test Fixtures (`sadasend/playwright`)
+
+```ts
+import { test, expect } from 'sadasend/playwright';
+
+test('completes 2FA signup flow without polling', async ({ page, ephemeralInbox }) => {
+  await page.goto('https://app.example.com/signup');
+  await page.fill('#email', ephemeralInbox.email);
+  await page.click('#submit');
+
+  // Sub-150ms zero-polling push via SSE
+  const otp = await ephemeralInbox.waitForOtp();
+  await page.fill('#otp', otp);
+  await expect(page.locator('#dashboard')).toBeVisible();
+});
+// Ephemeral inboxes are automatically destroyed during test teardown
 ```

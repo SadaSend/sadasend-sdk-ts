@@ -1780,7 +1780,7 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
     }
 
     expect(exitCode).toBe(0);
-    expect(stdout).toContain('20 PASSED');
+    expect(stdout).toContain('25 PASSED');
     expect(stdout).toContain('0 FAILED');
     expect(stdout).toContain('All TypeScript SDK operations verified and 100% operational!');
     expect(stdout).not.toContain('FAIL:');

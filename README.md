@@ -34,6 +34,7 @@ The official TypeScript and JavaScript SDK for [SadaSend](https://sadasend.com?u
   - [13. Multi-Agent Collision Arbiter (`arbiter`)](#13-multi-agent-collision-arbiter-arbiter)
   - [14. Ephemeral Inboxes & Reactive 2FA OTP Stream (`inboxes`)](#14-ephemeral-inboxes--reactive-2fa-otp-stream-inboxes)
   - [15. E2E Sandbox Testing (`testing`)](#15-e2e-sandbox-testing-testing)
+  - [16. Official Playwright Drop-in Test Fixtures (`sadasend/playwright`)](#16-official-playwright-drop-in-test-fixtures-sadasendplaywright)
 - [Timing-Safe HMAC Webhook Verification](#timing-safe-hmac-webhook-verification)
 - [Error Handling: Discriminated Unions](#error-handling-discriminated-unions)
 - [Native Model Context Protocol (MCP) Integration](#native-model-context-protocol-mcp-integration)
@@ -130,7 +131,7 @@ console.log(result.status, result.id);
 
 *Note: The code above is an active integration test verified against a live server in CI via [`examples/ten-lines.ts`](./examples/ten-lines.ts).*
 
-For an executable walkthrough covering all 18 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
+For an executable walkthrough covering all 24 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
 
 ---
 
@@ -234,6 +235,27 @@ if (res.ok) {
   console.log(`Message queued with ID: ${res.id}`);
 }
 ```
+
+#### First-Class React Email (`@react-email/components`) Support
+
+Write your transactional emails using TypeScript & JSX components with [React Email](https://react.email). SadaSend compiles and renders your React components to HTML and plain-text on the fly:
+
+```tsx
+import { WelcomeEmail } from './emails/welcome';
+
+const res = await sadasend.emails.send({
+  from: 'Acme <noreply@yourdomain.com>',
+  to: 'user@example.com',
+  subject: 'Welcome to Acme',
+  react: <WelcomeEmail name="Alex" />,
+});
+
+if (res.ok) {
+  console.log(`Sent message ID: ${res.id}`);
+}
+```
+
+> **Zero Runtime Bloat**: The SDK preserves its strict 0-dependency guarantee. When `react` is passed without `html`, SadaSend dynamically invokes `@react-email/render` (or `react-dom/server` fallback) at runtime without bundling heavy peer dependencies.
 
 ### 2. High-Throughput Batch Sends (`emails.batch`)
 
@@ -522,6 +544,37 @@ if (code.ok) {
   console.log('Verified Code:', code.data.code);
 }
 ```
+
+### 16. Official Playwright Drop-in Test Fixtures (`sadasend/playwright`)
+
+The modern, zero-polling replacement for Mailosaur (\$150/mo) and Mailtrap. Test 2FA authentication, magic sign-in links, and email notifications in end-to-end browser tests without manual boilerplate:
+
+```ts
+import { test, expect } from 'sadasend/playwright';
+
+test('user can complete 2FA signup', async ({ page, ephemeralInbox }) => {
+  await page.goto('https://app.example.com/signup');
+  await page.fill('#email', ephemeralInbox.email);
+  await page.click('#submit');
+
+  // Zero-polling reactive stream (<150ms push latency via SSE)
+  const otp = await ephemeralInbox.waitForOtp();
+  await page.fill('#otp', otp);
+
+  await expect(page.locator('#dashboard')).toBeVisible();
+});
+```
+
+#### Drop-in Fixture Capabilities
+- **`ephemeralInbox`**: Fresh, isolated ephemeral mailbox provisioned automatically for each test.
+  - `await ephemeralInbox.waitForOtp({ timeoutMs })`: Captures 6-digit OTP code in real time (<150ms).
+  - `await ephemeralInbox.waitForCode({ timeoutMs })`: Bidirectional alias for `waitForOtp`.
+  - `await ephemeralInbox.waitForMagicLink({ timeoutMs })`: Extracts authentication / verification URLs.
+  - `await ephemeralInbox.waitForMessage({ timeoutMs })`: Returns full parsed inbound message.
+  - `await ephemeralInbox.getMessages()`: Lists all messages received during the test run.
+- **Automatic Lifecycle Teardown**: Inboxes are automatically deleted immediately after each test finishes, guaranteeing zero leftover mailboxes and zero quota waste.
+- **`createInbox(options)`**: Factory to instantiate additional isolated inboxes for multi-user scenarios (e.g. inviting team members).
+- **Single Install**: Available directly from `sadasend/playwright` (`npm install sadasend`). Zero extra companion packages to install or manage.
 
 ---
 

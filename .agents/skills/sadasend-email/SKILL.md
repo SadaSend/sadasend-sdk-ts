@@ -27,7 +27,7 @@ Unlike legacy email APIs that blindly dispatch emails or crash via exceptions, S
    ```
    Refusals (like sending to a recipient outside the allowlist) are the security system working as intended. They do **not** throw.
 2. **`pending_approval` Is a Success, NOT a Failure:**
-   When an agent runs under an approval-scoped key (`sada_agent_sk_...`), `result.status` will be `'pending_approval'`. This means the email was safely ingested and placed in the **Human Approval Queue** for human review in the SadaSend dashboard. Do **not** retry or treat this as an outage.
+   When an agent runs under an approval-scoped key (`sada_agent_sk_...`) or triggers the volume surge detector / security hold (`held: true`, `holdReason`), `result.status` will be `'pending_approval'`. This means the email was safely ingested and placed in the **Human Approval Queue** for human review in the SadaSend dashboard. Inspect `result.holdReason` for context. Do **not** retry or treat this as an outage.
 3. **Use Safe Preflight Dry Runs (`dryRun: true`):**
    Before dispatching a sensitive or bulk email, run with `dryRun: true`. This validates domain verification, allowlists, syntax, and suppressions at zero cost without emailing external users or burning quota.
 4. **Always Provide Agent Provenance:**
@@ -36,6 +36,8 @@ Unlike legacy email APIs that blindly dispatch emails or crash via exceptions, S
    Pass `idempotencyKey: 'task-<id>'` to prevent accidental duplicate deliveries during retries, network glitches, or agent loop restarts.
 6. **Enable Deliverability Shield (`verifyBeforeSend: true`):**
    Protect sender reputation by enabling real-time recipient verification at send time. Refused undeliverables debit 0 sending quota and return a typed `UndeliverableRecipientError` for proactive remediation.
+7. **First-Class React Email Support (`react` prop):**
+   When sending dynamic JSX/TSX email templates, pass components directly to `react: <Component />`. The SDK compiles them to HTML and text automatically without bundling heavy peer dependencies.
 
 ---
 

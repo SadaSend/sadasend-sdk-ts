@@ -7,7 +7,7 @@
  * both of which are in Node 18+, Bun, Deno, Cloudflare Workers and the browser.
  */
 
-export { SadaSend } from "./client.js";
+export { SadaSend, parseSseStream, renderReactEmail } from "./client.js";
 export type {
   AccountChecklist, AccountInfo, AccountStats, AccountVolume, AccountVolumeDay,
   ApiKeySummary, Attachment, BatchItemResult, BatchResult, BatchVerificationResult,
@@ -21,6 +21,9 @@ export type {
   ArbiterStats, CooldownResult, CooldownStatus, EphemeralInbox, EphemeralInboxCreateInput,
   InboxOtpResult, InboxMessage, TestingInboundInput, WaitForCodeInput, WaitForCodeResult,
   SlackIntegrationStatus,
+  InboxStreamConnectedEvent, InboxStreamOtpEvent, InboxStreamMessageEvent,
+  InboxStreamHeartbeatEvent, InboxStreamEvent, InboxStreamResponse,
+  ReactEmailElement, RenderedEmail, ReactEmailRenderOptions,
 } from "./client.js";
 
 export {

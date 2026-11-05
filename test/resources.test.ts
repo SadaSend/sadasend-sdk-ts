@@ -14,9 +14,10 @@ function createMockClient(handler: (url: string, method: string, body?: any) => 
       headers: (init.headers as Record<string, string>) || {},
     });
     const res = handler(String(url), init.method || "GET", rawBody);
-    return new Response(res.body === undefined ? "" : JSON.stringify(res.body), {
+    const isSse = res.headers?.["content-type"] === "text/event-stream";
+    return new Response(res.body === undefined ? "" : isSse ? String(res.body) : JSON.stringify(res.body), {
       status: res.status,
-      headers: { "content-type": "application/json", ...res.headers },
+      headers: { "content-type": isSse ? "text/event-stream" : "application/json", ...res.headers },
     });
   }) as unknown as typeof globalThis.fetch;
 
@@ -450,7 +451,11 @@ describe("Full Resource API Surface Coverage", () => {
         return { status: 200, body: { ok: true, messages: [{ id: "m1", subject: "Verification code" }] } };
       }
       if (url.endsWith("/inboxes/inb_1/stream") && method === "GET") {
-        return { status: 200, body: { ok: true, url: "https://api.sadasend.com/inboxes/inb_1/stream" } };
+        return {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+          body: "event: connected\ndata: {\"ok\":true,\"inboxId\":\"inb_1\",\"email\":\"agent@auth.sadasend.com\",\"expiresAt\":\"2026-11-05T00:00:00Z\"}\n\n",
+        };
       }
       if (url.endsWith("/inboxes/inbound") && method === "POST") {
         return { status: 201, body: { ok: true, otp: "749201", magicLink: null } };
@@ -477,8 +482,20 @@ describe("Full Resource API Surface Coverage", () => {
     const inbMsgs = await sdk.inboxes.messages("inb_1");
     expect(inbMsgs.ok).toBe(true);
 
+    expect(sdk.inboxes.streamUrl("inb_1")).toBe("http://api.test/inboxes/inb_1/stream");
+
     const inbStream = await sdk.inboxes.stream("inb_1");
     expect(inbStream.ok).toBe(true);
+    if (inbStream.ok) {
+      expect(inbStream.data.url).toContain("/inboxes/inb_1/stream");
+      const events: any[] = [];
+      for await (const evt of inbStream.data) {
+        events.push(evt);
+      }
+      expect(events.length).toBe(1);
+      expect(events[0].event).toBe("connected");
+      expect(events[0].data.inboxId).toBe("inb_1");
+    }
 
     const inbInbound = await sdk.inboxes.inbound({ to: "agent@auth.sadasend.com", subject: "Code", text: "Your code is 749201" });
     expect(inbInbound.ok).toBe(true);
@@ -495,10 +512,10 @@ describe("Full Resource API Surface Coverage", () => {
         return { status: 200, body: { ok: true, status: "ingested", id: "tst_1" } };
       }
       if (url.endsWith("/testing/wait-for-code") && method === "POST") {
-        return { status: 200, body: { ok: true, code: "852963", magicLink: null } };
+        return { status: 200, body: { ok: true, otp: "852963", magicLink: null } };
       }
       if (url.includes("/testing/inboxes/tst%40test.com/code") && method === "GET") {
-        return { status: 200, body: { ok: true, code: "852963" } };
+        return { status: 200, body: { ok: true, otp: "852963" } };
       }
       if (url.includes("/testing/inboxes/tst%40test.com/latest") && method === "GET") {
         return { status: 200, body: { ok: true, message: { id: "m1" } } };
@@ -514,10 +531,17 @@ describe("Full Resource API Surface Coverage", () => {
 
     const tWait = await sdk.testing.waitForCode({ to: "tst@test.com", timeoutMs: 10000 });
     expect(tWait.ok).toBe(true);
-    if (tWait.ok) expect(tWait.data.code).toBe("852963");
+    if (tWait.ok) {
+      expect(tWait.data.code).toBe("852963");
+      expect(tWait.data.otp).toBe("852963");
+    }
 
     const tCode = await sdk.testing.inboxes.code("tst@test.com");
     expect(tCode.ok).toBe(true);
+    if (tCode.ok) {
+      expect(tCode.data.code).toBe("852963");
+      expect(tCode.data.otp).toBe("852963");
+    }
 
     const tLatest = await sdk.testing.inboxes.latest("tst@test.com");
     expect(tLatest.ok).toBe(true);

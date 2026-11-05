@@ -20,6 +20,12 @@
  * 16. Webhook constant-time HMAC-SHA256 signature verification & event parsing
  * 17. Real-time deliverability verification & shield (`tools.verify`, `tools.verifyBatch`)
  * 18. Standardized UTM campaign URL tagging (`tools.buildUtm`)
+ * 19. First-class React Email component rendering (`renderReactEmail`)
+ * 20. Inbound MX routing & context-safe parsing (`inbound.routes`, `inbound.parse`)
+ * 21. DMARC deliverability radar & scorecard (`dmarc.summary`)
+ * 22. Multi-agent collision arbiter & cooldowns (`arbiter.cooldowns`)
+ * 23. Ephemeral inboxes & reactive SSE stream (`inboxes.create`, `inboxes.streamUrl`, `inboxes.otp`)
+ * 24. E2E sandbox testing & OTP code assertions (`testing.inbound`, `testing.waitForCode`)
  *
  * Run this example:
  *   SADASEND_API_KEY="sada_live_sk_..." bun run examples/full-features.ts
@@ -35,6 +41,7 @@ import {
   AuthenticationError,
   InsufficientScopeError,
   UndeliverableRecipientError,
+  renderReactEmail,
 } from 'sadasend';
 import { verifyWebhook, parseWebhook } from 'sadasend/webhooks';
 
@@ -461,6 +468,93 @@ const utmResult = await sadasend.tools.buildUtm({
 if (utmResult.ok) {
   console.log(`Tagged URL: ${utmResult.data.tagged}`);
   console.log(`UTM Source: ${utmResult.data.params.utm_source} | Campaign: ${utmResult.data.params.utm_campaign}`);
+}
+
+// ---------------------------------------------------------------------------
+// 19. First-Class React Email Component Rendering
+// ---------------------------------------------------------------------------
+console.log('\n--- 19. First-Class React Email Component Rendering ---');
+const dummyReactEmail = { type: 'WelcomeEmail', props: { name: 'Alex Johnson' } };
+const renderedReact = await renderReactEmail(dummyReactEmail, {
+  renderer: (el) => ({
+    html: `<h1>Welcome ${(el as any).props.name}</h1><p>Sent via SadaSend SDK</p>`,
+    text: `Welcome ${(el as any).props.name} - Sent via SadaSend SDK`,
+  }),
+});
+console.log(`React email compiled: HTML length = ${renderedReact.html.length}, Text = "${renderedReact.text}"`);
+
+// ---------------------------------------------------------------------------
+// 20. Inbound MX Routing & Context-Safe Parser
+// ---------------------------------------------------------------------------
+console.log('\n--- 20. Inbound MX Routing & Anti-Injection Parser ---');
+const inboundRoutes = await sadasend.inbound.routes.list();
+if (inboundRoutes.ok) {
+  console.log(`Active inbound MX routes: ${inboundRoutes.data.routes.length}`);
+}
+
+const parsedInbound = await sadasend.inbound.parse({
+  subject: 'Help: Account Access',
+  text: 'Hi support, please help with my account.\n\n> Old conversation...',
+});
+if (parsedInbound.ok) {
+  console.log(`Inbound sanitized tokens: ${parsedInbound.data.content.cleanMarkdown.slice(0, 45)}...`);
+  console.log(`Prompt injection risk score: ${parsedInbound.data.security.injectionRiskScore}`);
+}
+
+// ---------------------------------------------------------------------------
+// 21. DMARC Deliverability Radar & Scorecard
+// ---------------------------------------------------------------------------
+console.log('\n--- 21. DMARC Deliverability Radar ---');
+const dmarcSummary = await sadasend.dmarc.summary('onboarding.sadasend.com');
+if (dmarcSummary.ok) {
+  console.log(`DMARC DKIM alignment: ${dmarcSummary.data.dkimAlignmentPct}% | Policy: ${dmarcSummary.data.currentPolicy}`);
+}
+
+// ---------------------------------------------------------------------------
+// 22. Multi-Agent Collision Arbiter & Cooldowns
+// ---------------------------------------------------------------------------
+console.log('\n--- 22. Multi-Agent Collision Arbiter ---');
+const setCooldown = await sadasend.arbiter.cooldowns.set(TEST_RECIPIENT, 86400, 'Outreach completed');
+if (setCooldown.ok) {
+  console.log(`Cross-agent cooldown set for: ${setCooldown.data.recipient} (cooldown = ${setCooldown.data.cooldown})`);
+}
+
+const cooldownStatus = await sadasend.arbiter.cooldowns.status(TEST_RECIPIENT);
+if (cooldownStatus.ok) {
+  console.log(`Cooldown status: remaining = ${cooldownStatus.data.remainingSeconds}s`);
+}
+
+// ---------------------------------------------------------------------------
+// 23. Ephemeral Inboxes & Reactive SSE Stream Endpoint
+// ---------------------------------------------------------------------------
+console.log('\n--- 23. Ephemeral Inboxes & Stream URL ---');
+const tempInbox = await sadasend.inboxes.create({ ttlSeconds: 600, alias: 'demo-agent' });
+if (tempInbox.ok) {
+  console.log(`Provisioned temporary mailbox: ${tempInbox.data.inbox.email} (ID: ${tempInbox.data.inbox.id})`);
+  const streamUrl = sadasend.inboxes.streamUrl(tempInbox.data.inbox.id);
+  console.log(`Reactive SSE stream URL: ${streamUrl}`);
+}
+
+// ---------------------------------------------------------------------------
+// 24. E2E Sandbox Testing & OTP Code Assertion
+// ---------------------------------------------------------------------------
+console.log('\n--- 24. E2E Testing Sandbox ---');
+const testSim = await sadasend.testing.inbound({
+  to: TEST_RECIPIENT,
+  from: 'auth@service.com',
+  subject: 'Your Verification Code',
+  text: 'Your security code is 849201',
+});
+if (testSim.ok) {
+  console.log(`Simulated test delivery ingested: ${testSim.data.id}`);
+}
+
+const testCode = await sadasend.testing.waitForCode({
+  to: TEST_RECIPIENT,
+  timeoutMs: 5000,
+});
+if (testCode.ok) {
+  console.log(`Verified test OTP code: ${testCode.data.code} (alias otp: ${testCode.data.otp})`);
 }
 
 console.log('\n=== SadaSend TypeScript SDK Demo Completed Successfully ===\n');

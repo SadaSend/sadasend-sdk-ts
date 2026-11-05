@@ -14,14 +14,14 @@ beforeAll(() => {
 
 describe('the built package', () => {
   test('compiles to JavaScript with type declarations beside it', () => {
-    for (const f of ['index.js', 'index.d.ts', 'client.js', 'webhooks.js', 'webhooks.d.ts']) {
+    for (const f of ['index.js', 'index.d.ts', 'client.js', 'webhooks.js', 'webhooks.d.ts', 'playwright.js', 'playwright.d.ts']) {
       expect(existsSync(join(dist, f)), `dist/${f} is missing`).toBe(true);
     }
   });
 
   test('every relative import carries a .js extension', () => {
     const offenders: string[] = [];
-    for (const f of ['index.js', 'client.js', 'errors.js', 'retry.js', 'webhooks.js']) {
+    for (const f of ['index.js', 'client.js', 'errors.js', 'retry.js', 'webhooks.js', 'playwright.js']) {
       for (const line of readFileSync(join(dist, f), 'utf8').split('\n')) {
         const m = /from '(\.[^']*)'/.exec(line);
         if (m && !m[1]!.endsWith('.js')) offenders.push(`${f}: ${m[1]}`);

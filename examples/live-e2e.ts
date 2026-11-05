@@ -243,6 +243,48 @@ await check('webhooks.verifyWebhook() HMAC cryptographic signature verification'
   if (tampered) throw new Error('Tampered payload should have failed signature verification');
 });
 
+// 7. Inbound, DMARC, Arbiter, and Deliverability Tools
+await check('inbound.routes.list()', async () => {
+  const res = await client.inbound.routes.list();
+  if (!res.ok) throw res.error;
+  if (!Array.isArray(res.data.routes)) throw new Error('Missing inbound routes array');
+});
+
+await check('dmarc.summary()', async () => {
+  const res = await client.dmarc.summary('onboarding.sadasend.com');
+  if (!res.ok) throw res.error;
+  if (typeof res.data.dkimAlignmentPct !== 'number') throw new Error('Missing dkimAlignmentPct');
+});
+
+await check('arbiter.stats()', async () => {
+  const res = await client.arbiter.stats();
+  if (!res.ok) throw res.error;
+  if (typeof res.data.activeCooldownsCount !== 'number') throw new Error('Missing activeCooldownsCount');
+});
+
+await check('inboxes.create() & inboxes.streamUrl()', async () => {
+  const res = await client.inboxes.create({ ttlSeconds: 300, alias: 'live-test-agent' });
+  if (!res.ok) throw res.error;
+  if (!res.data.inbox.id || !res.data.inbox.email) throw new Error('Missing inbox data');
+  const streamUrl = client.inboxes.streamUrl(res.data.inbox.id);
+  if (!streamUrl.includes(res.data.inbox.id)) throw new Error('Invalid stream URL generated');
+});
+
+await check('tools.verify() & tools.buildUtm()', async () => {
+  const vRes = await client.tools.verify(TEST_RECIPIENT);
+  if (!vRes.ok) throw vRes.error;
+  if (!vRes.data.verdict) throw new Error('Missing verdict in verification result');
+
+  const utmRes = await client.tools.buildUtm({
+    url: 'https://sadasend.com/launch#pricing',
+    source: 'live_test',
+    medium: 'email',
+    campaign: 'e2e_suite',
+  });
+  if (!utmRes.ok) throw utmRes.error;
+  if (!utmRes.data.tagged.includes('utm_source=live_test')) throw new Error('Missing utm_source in tagged URL');
+});
+
 console.log(`\n------------------------------------------------------`);
 console.log(`Results: \x1b[32m${passed} PASSED\x1b[0m | \x1b[31m${failed} FAILED\x1b[0m out of ${passed + failed} checks`);
 console.log(`------------------------------------------------------\n`);
