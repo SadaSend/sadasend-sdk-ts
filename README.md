@@ -4,9 +4,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](https://github.com/SadaSend/sadasend-sdk-ts/blob/main/LICENSE)
 [![Zero Dependencies](https://img.shields.io/badge/dependencies-0-success.svg?style=flat-square)](https://www.npmjs.com/package/sadasend)
 [![TypeScript Strict](https://img.shields.io/badge/TypeScript-strict-3178C6.svg?style=flat-square)](https://www.typescriptlang.org/)
-[![Runtime Support](https://img.shields.io/badge/runtimes-Node%2018%2B%20%7C%20Bun%20%7C%20Deno%20%7C%20Workers%20%7C%20Edge-informational.svg?style=flat-square)](https://sadasend.com/docs/sdks/typescript)
+[![Runtime Support](https://img.shields.io/badge/runtimes-Node%2018%2B%20%7C%20Bun%20%7C%20Deno%20%7C%20Workers%20%7C%20Edge-informational.svg?style=flat-square)](https://sadasend.com/docs/sdks/typescript?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
 
-The official TypeScript and JavaScript SDK for [SadaSend](https://sadasend.com). High-performance transactional email with unbypassable server-enforced guardrails engineered for human engineering teams and autonomous AI agents.
+The official TypeScript and JavaScript SDK for [SadaSend](https://sadasend.com?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk). High-performance transactional email with unbypassable server-enforced guardrails engineered for human engineering teams and autonomous AI agents.
 
 **Zero dependencies.** Runs on native web standards (`globalThis.fetch` and `crypto.subtle`) across **Node.js 18+**, **Bun**, **Deno**, **Cloudflare Workers**, **Next.js Edge**, and modern browsers. No transitive supply-chain risks, no bloated bundles (< 8 KB unpacked).
 
@@ -160,7 +160,7 @@ if (!result.ok && result.error instanceof RecipientNotAllowlistedError) {
 ```
 
 ### 2. Human Approval Mode (`mode: 'approval'`)
-Keys minted in approval mode automatically place outgoing messages into `pending_approval` status. The message is queued safely in the [SadaSend Web Dashboard](https://app.sadasend.com/approvals) until a team member approves or cancels it:
+Keys minted in approval mode automatically place outgoing messages into `pending_approval` status. The message is queued safely in the [SadaSend Web Dashboard](https://app.sadasend.com/approvals?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk) until a team member approves or cancels it:
 
 ```ts
 const send = await sadasend.emails.send({
@@ -314,7 +314,7 @@ const templates = await sadasend.templates.list();
 // Test render against test variables
 const preview = await sadasend.templates.render('welcome-email', {
   first_name: 'Sarah',
-  login_url: 'https://app.sadasend.com/login',
+  login_url: 'https://app.sadasend.com/login?utm_source=email&utm_medium=template&utm_campaign=welcome',
 });
 
 if (preview.ok) {
@@ -653,7 +653,7 @@ Connect your AI agent with zero local software to install:
 }
 ```
 
-Read the full [Model Context Protocol Guide](https://sadasend.com/docs/mcp-guide) for tool declarations, schemas, and best practices.
+Read the full [Model Context Protocol Guide](https://sadasend.com/docs/mcp-guide?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk) for tool declarations, schemas, and best practices.
 
 ---
 
@@ -661,16 +661,16 @@ Read the full [Model Context Protocol Guide](https://sadasend.com/docs/mcp-guide
 
 For exhaustive architectural specifications, REST API contracts, and guides:
 
-- 🌐 [Official Website](https://sadasend.com)
-- 📖 [Developer Documentation](https://sadasend.com/docs)
-- 📘 [TypeScript SDK Reference](https://sadasend.com/docs/sdks/typescript)
-- 📡 [REST API Documentation](https://sadasend.com/docs/api-reference)
-- 🤖 [Model Context Protocol (MCP) Guide](https://sadasend.com/docs/mcp-guide)
-- 🛡️ [AI Agent Email Guardrails Overview](https://sadasend.com/docs/agent-guardrails)
-- 🔐 [DKIM, SPF & DMARC Deliverability Guide](https://sadasend.com/docs/domains)
-- 🪝 [Webhooks & Signature Verification](https://sadasend.com/docs/webhooks)
-- 💳 [Plans, Pricing & Quotas](https://sadasend.com/pricing)
-- 🚦 [Platform Live System Status](https://status.sadasend.com)
+- 🌐 [Official Website](https://sadasend.com?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 📖 [Developer Documentation](https://sadasend.com/docs?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 📘 [TypeScript SDK Reference](https://sadasend.com/docs/sdks/typescript?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 📡 [REST API Documentation](https://sadasend.com/docs/api-reference?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 🤖 [Model Context Protocol (MCP) Guide](https://sadasend.com/docs/mcp-guide?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 🛡️ [AI Agent Email Guardrails Overview](https://sadasend.com/docs/agent-guardrails?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 🔐 [DKIM, SPF & DMARC Deliverability Guide](https://sadasend.com/docs/domains?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 🪝 [Webhooks & Signature Verification](https://sadasend.com/docs/webhooks?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 💳 [Plans, Pricing & Quotas](https://sadasend.com/pricing?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
+- 🚦 [Platform Live System Status](https://status.sadasend.com?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
 
 ---
 
@@ -689,7 +689,7 @@ Traditional email APIs only provide basic transactional sending with no concept 
 SadaSend automatically mints a UUIDv4 `Idempotency-Key` on every send. When the SDK retries after a connection timeout or network drop, it reuses the **exact same idempotency key**. The server returns the cached response if the initial request succeeded, preventing duplicate emails.
 
 ### What is Human Approval Mode?
-When an API key is minted with `mode: 'approval'`, outgoing messages are held in `pending_approval` state rather than dispatched to the network. An operator can review the message body, recipient, and attachments in the [SadaSend Web Console](https://app.sadasend.com/approvals) before clicking "Approve".
+When an API key is minted with `mode: 'approval'`, outgoing messages are held in `pending_approval` state rather than dispatched to the network. An operator can review the message body, recipient, and attachments in the [SadaSend Web Console](https://app.sadasend.com/approvals?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk) before clicking "Approve".
 
 ---
 
@@ -709,6 +709,6 @@ It guides agents to:
 
 - **npm Package:** [https://www.npmjs.com/package/sadasend](https://www.npmjs.com/package/sadasend)
 - **GitHub Repository:** [SadaSend/sadasend-sdk-ts](https://github.com/SadaSend/sadasend-sdk-ts)
-- **License:** [MIT License](./LICENSE) © [SadaSend](https://sadasend.com)
+- **License:** [MIT License](./LICENSE) © [SadaSend](https://sadasend.com?utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk)
 - **General Support:** [support@sadasend.com](mailto:support@sadasend.com)
 - **Security Vulnerabilities:** [security@sadasend.com](mailto:security@sadasend.com)

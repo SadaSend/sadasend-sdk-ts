@@ -185,7 +185,7 @@ export type MessageProvenance = {
 };
 
 export type SendResult =
-  | { ok: true; id: string; status: 'queued' | 'pending_approval'; holdType?: 'tenant' | 'security' | null; dryRun?: true; rendered?: unknown }
+  | { ok: true; id: string; status: 'queued' | 'pending_approval'; held?: boolean; holdType?: 'tenant' | 'security' | null; holdReason?: string | null; dryRun?: true; rendered?: unknown }
   | { ok: false; error: SadaSendError };
 
 export type BatchItemResult = {
@@ -214,7 +214,9 @@ export type Message = {
   from: string;
   subject: string | null;
   status: MessageStatus;
+  held?: boolean;
   holdType?: 'tenant' | 'security' | null;
+  holdReason?: string | null;
   at: string;
   events?: { type: string; at: string; detail?: string }[];
   channel?: string;
@@ -736,7 +738,7 @@ export class SadaSend {
       if (resolvedSource) outgoingHeaders['x-sadasend-source'] = resolvedSource;
       if (resolvedPriority) outgoingHeaders['x-sadasend-priority'] = resolvedPriority;
 
-      const r = await this.#request<{ id: string; status: 'queued' | 'pending_approval'; holdType?: 'tenant' | 'security' | null; dryRun?: true; rendered?: unknown }>(
+      const r = await this.#request<{ id: string; status: 'queued' | 'pending_approval'; held?: boolean; holdType?: 'tenant' | 'security' | null; holdReason?: string | null; dryRun?: true; rendered?: unknown }>(
         'POST', '/emails', {
         headers: outgoingHeaders,
         body: {

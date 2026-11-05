@@ -5,6 +5,16 @@ All notable changes to the `sadasend` TypeScript SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-11-05
+
+### Added
+- **Volume Surge Anomaly Hold & Security Hold Reason**:
+  - Added `held?: boolean` and `holdReason?: string | null` to `SendResult` and `Message` interfaces.
+  - When an outbound send triggers the adaptive volume surge detector (projected daily volume exceeds safety multiplier, e.g. 3x 7-day baseline) or security hold policies, `held: true`, `holdType: 'security'`, and a descriptive human-readable `holdReason` are preserved on the returned result and on message retrieval.
+  - Updated test fixtures in `test/provenanceSdk.test.ts` to assert that `held`, `holdType`, and `holdReason` are faithfully returned and parsed on `emails.send` and `emails.get`.
+- **Documentation & Link Traffic Attribution**:
+  - Attached standardized UTM campaign tracking parameters (`utm_source=npm&utm_medium=readme&utm_campaign=typescript_sdk`) across all canonical documentation, API references, console, and status links in `README.md`.
+
 ## [0.1.2] - 2026-10-30
 
 ### Added

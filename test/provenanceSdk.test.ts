@@ -149,7 +149,13 @@ describe('SDK Provenance Tracking', () => {
     const f = scriptedFetch([
       {
         status: 202,
-        body: { id: 'msg_held_1', status: 'pending_approval', holdType: 'security' },
+        body: {
+          id: 'msg_held_1',
+          status: 'pending_approval',
+          held: true,
+          holdType: 'security',
+          holdReason: 'Volume surge anomaly detected: projected daily volume (3,500) exceeds safety threshold (3,000, 3x 7-day baseline). Held for operator review.',
+        },
       },
       {
         status: 200,
@@ -159,7 +165,9 @@ describe('SDK Provenance Tracking', () => {
           to: ['target@external.com'],
           subject: 'Outreach',
           status: 'pending_approval',
+          held: true,
           holdType: 'security',
+          holdReason: 'Volume surge anomaly detected: projected daily volume (3,500) exceeds safety threshold (3,000, 3x 7-day baseline). Held for operator review.',
           at: '2026-10-30T10:00:00Z',
           provenance: {
             channel: 'agent',
@@ -185,14 +193,18 @@ describe('SDK Provenance Tracking', () => {
     expect(sendRes.ok).toBe(true);
     if (sendRes.ok) {
       expect(sendRes.status).toBe('pending_approval');
+      expect(sendRes.held).toBe(true);
       expect(sendRes.holdType).toBe('security');
+      expect(sendRes.holdReason).toContain('Volume surge anomaly detected');
     }
 
     const getRes = await sdk.emails.get('msg_held_1');
     expect(getRes.ok).toBe(true);
     if (getRes.ok) {
       expect(getRes.data.status).toBe('pending_approval');
+      expect(getRes.data.held).toBe(true);
       expect(getRes.data.holdType).toBe('security');
+      expect(getRes.data.holdReason).toContain('Volume surge anomaly detected');
       expect(getRes.data.provenance?.priority).toBe('standard');
       expect(getRes.data.provenance?.agentName).toBe('sales-agent');
     }
