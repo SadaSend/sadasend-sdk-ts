@@ -378,11 +378,17 @@ if (stats.ok) {
 
 // Inspect active agent circuit breakers
 const breakers = await sadasend.account.circuitBreakers();
+
+// Inspect production review request status
+const prod = await sadasend.account.productionRequest();
+if (prod.ok) {
+  console.log(`Production Status: ${prod.data.status} | Risk Tier: ${prod.data.riskTier}`);
+}
 ```
 
-### 8. API Key Governance & Approvals Queue (`keys`)
+### 8. API Key Governance & Approvals Queue (`keys`, `support`)
 
-Audit active API keys and inspect held emails pending human sign-off:
+Audit active API keys, inspect held emails pending human sign-off, and query support doc tags:
 
 ```ts
 // List registered keys
@@ -392,6 +398,12 @@ const keys = await sadasend.keys.list();
 const held = await sadasend.keys.approvals();
 if (held.ok) {
   console.log(`Pending approval count: ${held.data.pending.length}`);
+}
+
+// Autocomplete documentation mention tags
+const mentions = await sadasend.support.mentions({ q: 'api' });
+if (mentions.ok && mentions.data.mentions.length > 0) {
+  console.log(`Doc Mention: ${mentions.data.mentions[0]!.tag} (${mentions.data.mentions[0]!.label})`);
 }
 ```
 
@@ -482,8 +494,8 @@ if (parsed.ok) {
 Upload RFC 7489 aggregate feedback reports and inspect SPF/DKIM alignment scores:
 
 ```ts
-// Get domain deliverability summary & policy upgrade guidance
-const summary = await sadasend.dmarc.summary('yourdomain.com');
+// Get domain deliverability summary & policy upgrade guidance (or via dmarc.domains.summary alias)
+const summary = await sadasend.dmarc.domains.summary('yourdomain.com');
 if (summary.ok) {
   console.log('DKIM Alignment:', summary.data.dkimAlignmentPct + '%');
   console.log('Current Policy:', summary.data.currentPolicy);
@@ -496,11 +508,11 @@ if (summary.ok) {
 Enforce cross-agent quiet periods so multiple autonomous bots never message the same recipient simultaneously:
 
 ```ts
-// Set a 24-hour cooldown for a customer
-await sadasend.arbiter.cooldowns.set('lead@enterprise.com', 86400, 'Sales agent outreach completed');
+// Set a 24-hour cooldown for a customer (or via arbiter.recipients.set alias)
+await sadasend.arbiter.recipients.set('lead@enterprise.com', 86400, 'Sales agent outreach completed');
 
-// Inspect recipient status
-const status = await sadasend.arbiter.cooldowns.status('lead@enterprise.com');
+// Inspect recipient status (or via arbiter.recipients.status alias)
+const status = await sadasend.arbiter.recipients.status('lead@enterprise.com');
 if (status.ok) {
   console.log('Cooldown active:', status.data.cooldownActive);
 }

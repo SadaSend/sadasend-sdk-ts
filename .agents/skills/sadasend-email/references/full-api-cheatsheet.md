@@ -90,6 +90,9 @@ const checklist = await sadasend.account.checklist();
 
 const breakers = await sadasend.account.circuitBreakers();
 // breakers.data: { circuitBreakers: [{ agentIdentifier, agentName, trippedAt, reason }] }
+
+const prodRequest = await sadasend.account.productionRequest();
+// prodRequest.data: { status, requestedAt, websiteUrl, category, notes, riskTier, domainRiskScore }
 ```
 
 ---
@@ -142,6 +145,10 @@ const approvals = await sadasend.keys.approvals();
 
 // List API keys
 const keys = await sadasend.keys.list();
+
+// Autocomplete support documentation tags
+const mentions = await sadasend.support.mentions({ q: 'api' });
+// mentions.data: { ok: true, mentions: [{ tag, label, url, description }] }
 ```
 
 ---
@@ -193,8 +200,8 @@ const parsed = await sadasend.inbound.parse({
 ## 9. DMARC Deliverability Radar
 
 ```ts
-// Query domain alignment scores and policy upgrade recommendations
-const dmarcSummary = await sadasend.dmarc.summary('yourdomain.com');
+// Query domain alignment scores and policy upgrade recommendations (or via dmarc.domains.summary)
+const dmarcSummary = await sadasend.dmarc.domains.summary('yourdomain.com');
 // dmarcSummary.data: { dkimAlignmentPct, spfAlignmentPct, currentPolicy, recommendedPolicy }
 
 // Upload aggregate XML feedback report
@@ -206,12 +213,15 @@ const uploaded = await sadasend.dmarc.reports.upload(xmlReportString);
 ## 10. Multi-Agent Collision Arbiter
 
 ```ts
-// Set cooldown to prevent cross-agent recipient spam
-await sadasend.arbiter.cooldowns.set('lead@enterprise.com', 86400, 'Sales outreach completed');
+// Set cooldown to prevent cross-agent recipient spam (or via arbiter.recipients.set)
+await sadasend.arbiter.recipients.set('lead@enterprise.com', 86400, 'Sales outreach completed');
 
-// Check recipient collision status
-const status = await sadasend.arbiter.cooldowns.status('lead@enterprise.com');
+// Check recipient collision status (or via arbiter.recipients.status)
+const status = await sadasend.arbiter.recipients.status('lead@enterprise.com');
 // status.data: { cooldownActive: boolean, remainingSeconds: number }
+
+// Clear active cooldown
+await sadasend.arbiter.recipients.clear('lead@enterprise.com');
 ```
 
 ---

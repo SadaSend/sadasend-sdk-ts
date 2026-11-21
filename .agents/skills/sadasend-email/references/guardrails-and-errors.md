@@ -141,3 +141,19 @@ SadaSend is engineered to prevent autonomous AI agents from hallucinating, leaki
   1. Do **not** treat this as a failure or network glitch.
   2. The message has been safely accepted and placed in the Human Approval Queue.
   3. Inform the user or supervisor that the message is held pending operator review due to the reason in `result.holdReason`.
+
+---
+
+## 12. Production Access Gating (`account.productionRequest`)
+
+- **Why It Happens:** Before accounts can send emails to arbitrary public recipients without allowlists, they must have approved production sending access.
+- **Check Review Status:**
+  ```ts
+  const prod = await sadasend.account.productionRequest();
+  // prod.data.status: 'pending' | 'approved' | 'rejected' | 'none'
+  // prod.data.riskTier: 'standard' | 'elevated' | null
+  // prod.data.domainRiskScore: number | null
+  ```
+- **Agent Self-Correction Strategy:**
+  1. If `prod.data.status === 'pending'`, advise the human operator that production access review is underway.
+  2. If `prod.data.status === 'none'`, advise submitting a production request via the SadaSend dashboard before sending to external production recipients.

@@ -68,6 +68,12 @@ await check('account.checklist()', async () => {
   if (!Array.isArray(res.data.items)) throw new Error('Missing items in account checklist');
 });
 
+await check('account.productionRequest()', async () => {
+  const res = await client.account.productionRequest();
+  if (!res.ok) throw res.error;
+  if (!res.data.status) throw new Error('Missing status in production request');
+});
+
 // 2. Domain Operations
 await check('domains.list()', async () => {
   const res = await client.domains.list();
@@ -283,6 +289,22 @@ await check('tools.verify() & tools.buildUtm()', async () => {
   });
   if (!utmRes.ok) throw utmRes.error;
   if (!utmRes.data.tagged.includes('utm_source=live_test')) throw new Error('Missing utm_source in tagged URL');
+});
+
+await check('support.mentions()', async () => {
+  const res = await client.support.mentions({ q: 'api' });
+  if (!res.ok) throw res.error;
+  if (!Array.isArray(res.data.mentions)) throw new Error('Missing mentions array');
+});
+
+await check('dmarc.domains.summary() & arbiter.recipients.status()', async () => {
+  const dRes = await client.dmarc.domains.summary('onboarding.sadasend.com');
+  if (!dRes.ok) throw dRes.error;
+  if (typeof dRes.data.dkimAlignmentPct !== 'number') throw new Error('Missing dkimAlignmentPct');
+
+  const aRes = await client.arbiter.recipients.status(TEST_RECIPIENT);
+  if (!aRes.ok) throw aRes.error;
+  if (typeof aRes.data.cooldownActive !== 'boolean') throw new Error('Missing cooldownActive');
 });
 
 console.log(`\n------------------------------------------------------`);

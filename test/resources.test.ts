@@ -78,7 +78,7 @@ describe("Full Resource API Surface Coverage", () => {
     expect(calls.length).toBe(5);
   });
 
-  test("account: get, stats, volume, checklist, circuitBreakers, staffAccess", async () => {
+  test("account: get, stats, volume, checklist, circuitBreakers, staffAccess, productionRequest", async () => {
     const { sdk, calls } = createMockClient((url) => {
       if (url.endsWith("/account")) {
         return { status: 200, body: { id: "acc_1", org: "Acme", plan: "pro", emailsUsed: 50, emailQuota: 50000 } };
@@ -90,13 +90,16 @@ describe("Full Resource API Surface Coverage", () => {
         return { status: 200, body: { days: [{ date: "2026-10-10", sent: 10 }] } };
       }
       if (url.endsWith("/account/checklist")) {
-        return { status: 200, body: { items: [{ name: "domain_verified", complete: true }] } };
+        return { status: 200, body: { items: [{ key: "domain_verified", title: "Domain Verified", completed: true }], completed: 1, total: 1 } };
       }
       if (url.endsWith("/account/circuit-breakers")) {
-        return { status: 200, body: { breakers: [] } };
+        return { status: 200, body: { circuitBreakers: [] } };
       }
       if (url.endsWith("/account/staff-access")) {
-        return { status: 200, body: { logs: [] } };
+        return { status: 200, body: { accesses: [] } };
+      }
+      if (url.endsWith("/account/production-request")) {
+        return { status: 200, body: { status: "pending", requestedAt: "2026-11-20T12:00:00Z", websiteUrl: "https://acme.com", category: "transactional", notes: "SaaS receipts", riskTier: "standard", domainRiskScore: 0 } };
       }
       return { status: 404, body: { error: "not_found" } };
     });
@@ -114,14 +117,21 @@ describe("Full Resource API Surface Coverage", () => {
 
     const chk = await sdk.account.checklist();
     expect(chk.ok).toBe(true);
+    if (chk.ok) expect(chk.data.completed).toBe(1);
 
     const cb = await sdk.account.circuitBreakers();
     expect(cb.ok).toBe(true);
+    if (cb.ok) expect(Array.isArray(cb.data.circuitBreakers)).toBe(true);
 
     const sa = await sdk.account.staffAccess();
     expect(sa.ok).toBe(true);
+    if (sa.ok) expect(Array.isArray(sa.data.accesses)).toBe(true);
 
-    expect(calls.length).toBe(6);
+    const pr = await sdk.account.productionRequest();
+    expect(pr.ok).toBe(true);
+    if (pr.ok) expect(pr.data.status).toBe("pending");
+
+    expect(calls.length).toBe(7);
   });
 
   test("domains: list, records, verify", async () => {
@@ -209,7 +219,7 @@ describe("Full Resource API Surface Coverage", () => {
     expect(calls.length).toBe(4);
   });
 
-  test("keys, support, team, tools, webhooks", async () => {
+  test("keys, support (tickets & mentions), team, tools, webhooks", async () => {
     const { sdk, calls } = createMockClient((url, method) => {
       if (url.endsWith("/keys") && method === "GET") {
         return { status: 200, body: { keys: [{ id: "k1", name: "Agent Key" }] } };
@@ -222,6 +232,9 @@ describe("Full Resource API Surface Coverage", () => {
       }
       if (url.includes("/support/tickets") && method === "GET") {
         return { status: 200, body: { tickets: [{ id: "t1", subject: "Help" }] } };
+      }
+      if (url.includes("/support/mentions") && method === "GET") {
+        return { status: 200, body: { ok: true, mentions: [{ tag: "@docs/api", label: "API Reference", url: "/docs/api" }] } };
       }
       if (url.endsWith("/team") && method === "GET") {
         return { status: 200, body: { members: [{ email: "dev@acme.com", role: "owner" }] } };
@@ -254,6 +267,10 @@ describe("Full Resource API Surface Coverage", () => {
     expect(sTicket.ok).toBe(true);
     if (sTicket.ok) expect(sTicket.data.id).toBe("t1");
 
+    const sMentions = await sdk.support.mentions({ q: "api" });
+    expect(sMentions.ok).toBe(true);
+    if (sMentions.ok) expect(sMentions.data.mentions[0]!.tag).toBe("@docs/api");
+
     const team = await sdk.team.get();
     expect(team.ok).toBe(true);
 
@@ -270,7 +287,7 @@ describe("Full Resource API Surface Coverage", () => {
     const whDeliv = await sdk.webhooks.deliveries("wh_1");
     expect(whDeliv.ok).toBe(true);
 
-    expect(calls.length).toBe(9);
+    expect(calls.length).toBe(10);
   });
 
   test("inbound: routes, messages, parse, simulate", async () => {
@@ -345,7 +362,7 @@ describe("Full Resource API Surface Coverage", () => {
     expect(calls.length).toBe(9);
   });
 
-  test("dmarc: reports, summary, threats", async () => {
+  test("dmarc: reports, summary & domains, threats", async () => {
     const { sdk, calls } = createMockClient((url, method) => {
       if (url.endsWith("/dmarc/reports/rep_1") && method === "GET") {
         return { status: 200, body: { ok: true, report: { id: "rep_1", domain: "acme.com" } } };
@@ -379,13 +396,16 @@ describe("Full Resource API Surface Coverage", () => {
     expect(summary.ok).toBe(true);
     if (summary.ok) expect(summary.data.dkimAlignmentPct).toBe(100);
 
+    const domSummary = await sdk.dmarc.domains.summary("acme.com");
+    expect(domSummary.ok).toBe(true);
+
     const threats = await sdk.dmarc.threats();
     expect(threats.ok).toBe(true);
 
-    expect(calls.length).toBe(5);
+    expect(calls.length).toBe(6);
   });
 
-  test("arbiter: stats, cooldowns, tickets", async () => {
+  test("arbiter: stats, cooldowns & recipients, tickets", async () => {
     const { sdk, calls } = createMockClient((url, method) => {
       if (url.endsWith("/arbiter/stats") && method === "GET") {
         return { status: 200, body: { ok: true, activeCooldownsCount: 2, openTicketsCount: 0, collisionsPrevented: 15 } };
@@ -421,13 +441,22 @@ describe("Full Resource API Surface Coverage", () => {
     const cdStatus = await sdk.arbiter.cooldowns.status("lead@corp.com");
     expect(cdStatus.ok).toBe(true);
 
+    const recipSet = await sdk.arbiter.recipients.set("lead@corp.com", 86400, "Outreach");
+    expect(recipSet.ok).toBe(true);
+
+    const recipClear = await sdk.arbiter.recipients.clear("lead@corp.com");
+    expect(recipClear.ok).toBe(true);
+
+    const recipStatus = await sdk.arbiter.recipients.status("lead@corp.com");
+    expect(recipStatus.ok).toBe(true);
+
     const tktCreate = await sdk.arbiter.tickets.create("lead@corp.com", "Support open");
     expect(tktCreate.ok).toBe(true);
 
     const tktDelete = await sdk.arbiter.tickets.delete("lead@corp.com");
     expect(tktDelete.ok).toBe(true);
 
-    expect(calls.length).toBe(6);
+    expect(calls.length).toBe(9);
   });
 
   test("inboxes: list, get, delete, create, otp, messages, stream, inbound", async () => {

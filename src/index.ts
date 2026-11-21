@@ -9,11 +9,11 @@
 
 export { SadaSend, parseSseStream, renderReactEmail } from "./client.js";
 export type {
-  AccountChecklist, AccountInfo, AccountStats, AccountVolume, AccountVolumeDay,
+  AccountChecklist, AccountInfo, AccountProductionRequest, AccountStats, AccountVolume, AccountVolumeDay,
   ApiKeySummary, Attachment, BatchItemResult, BatchResult, BatchVerificationResult,
   ChecklistItem, CircuitBreaker, ClientOptions,
   DeliverabilityTool, HeldApproval, Message, MessageStatus, MessageProvenance, Result, SendInput,
-  SendResult, StaffAccess, SupportTicketSummary, TeamMember, TemplateDetail,
+  SendResult, StaffAccess, SupportMention, SupportMentionsResult, SupportTicketSummary, TeamMember, TemplateDetail,
   TemplateSummary, VerificationCheckResult, VerificationResult,
   UtmBuildInput, UtmBuildResult, UtmOptions, WebhookDelivery, WebhookEndpoint,
   InboundRoute, InboundRouteInput, InboundMessageSummary, InboundParseInput, InboundParseResult,

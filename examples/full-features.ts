@@ -3,7 +3,7 @@
  *
  * This master example demonstrates the complete capabilities of SadaSend:
  *  1. Client initialization with AI agent provenance defaults & jittered retries
- *  2. Account telemetry, quota metrics, onboarding checklist & circuit breakers
+ *  2. Account telemetry, quota metrics, onboarding checklist, circuit breakers & production request
  *  3. Sending domains management & nameserver DNS verification (SPF, DKIM, DMARC)
  *  4. Preflight dry runs (`dryRun: true`) — zero-cost deliverability validation
  *  5. Autonomous AI agent sending & human approval mode (`pending_approval`)
@@ -16,14 +16,14 @@
  * 12. Querying message history & filtering by agent / tag (`emails.list`)
  * 13. Server-side Liquid dynamic templates (`templates.list`, `templates.render`)
  * 14. Suppression list management (`suppressions.add`, `suppressions.list`)
- * 15. Human approval queue monitoring (`keys.approvals`)
+ * 15. Human approval queue monitoring & doc mentions autocomplete (`keys.approvals`, `support.mentions`)
  * 16. Webhook constant-time HMAC-SHA256 signature verification & event parsing
  * 17. Real-time deliverability verification & shield (`tools.verify`, `tools.verifyBatch`)
  * 18. Standardized UTM campaign URL tagging (`tools.buildUtm`)
  * 19. First-class React Email component rendering (`renderReactEmail`)
  * 20. Inbound MX routing & context-safe parsing (`inbound.routes`, `inbound.parse`)
- * 21. DMARC deliverability radar & scorecard (`dmarc.summary`)
- * 22. Multi-agent collision arbiter & cooldowns (`arbiter.cooldowns`)
+ * 21. DMARC deliverability radar & scorecard (`dmarc.summary`, `dmarc.domains.summary`)
+ * 22. Multi-agent collision arbiter & cooldowns (`arbiter.cooldowns`, `arbiter.recipients`)
  * 23. Ephemeral inboxes & reactive SSE stream (`inboxes.create`, `inboxes.streamUrl`, `inboxes.otp`)
  * 24. E2E sandbox testing & OTP code assertions (`testing.inbound`, `testing.waitForCode`)
  *
@@ -104,6 +104,11 @@ if (checklist.ok) {
 const breakers = await sadasend.account.circuitBreakers();
 if (breakers.ok) {
   console.log(`Active Circuit Breakers: ${breakers.data.circuitBreakers.length}`);
+}
+
+const prodRequest = await sadasend.account.productionRequest();
+if (prodRequest.ok) {
+  console.log(`Production Review Status: ${prodRequest.data.status} | Risk Tier: ${prodRequest.data.riskTier ?? 'standard'}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +397,11 @@ if (pendingApprovals.ok) {
   }
 }
 
+const docMentions = await sadasend.support.mentions({ q: 'api' });
+if (docMentions.ok && docMentions.data.mentions.length > 0) {
+  console.log(`Support Doc Mention Autocomplete: ${docMentions.data.mentions[0]!.tag} -> ${docMentions.data.mentions[0]!.label}`);
+}
+
 // ---------------------------------------------------------------------------
 // 16. Constant-Time Webhook Signature Verification
 // ---------------------------------------------------------------------------
@@ -505,7 +515,7 @@ if (parsedInbound.ok) {
 // 21. DMARC Deliverability Radar & Scorecard
 // ---------------------------------------------------------------------------
 console.log('\n--- 21. DMARC Deliverability Radar ---');
-const dmarcSummary = await sadasend.dmarc.summary('onboarding.sadasend.com');
+const dmarcSummary = await sadasend.dmarc.domains.summary('onboarding.sadasend.com');
 if (dmarcSummary.ok) {
   console.log(`DMARC DKIM alignment: ${dmarcSummary.data.dkimAlignmentPct}% | Policy: ${dmarcSummary.data.currentPolicy}`);
 }
@@ -514,12 +524,12 @@ if (dmarcSummary.ok) {
 // 22. Multi-Agent Collision Arbiter & Cooldowns
 // ---------------------------------------------------------------------------
 console.log('\n--- 22. Multi-Agent Collision Arbiter ---');
-const setCooldown = await sadasend.arbiter.cooldowns.set(TEST_RECIPIENT, 86400, 'Outreach completed');
+const setCooldown = await sadasend.arbiter.recipients.set(TEST_RECIPIENT, 86400, 'Outreach completed');
 if (setCooldown.ok) {
   console.log(`Cross-agent cooldown set for: ${setCooldown.data.recipient} (cooldown = ${setCooldown.data.cooldown})`);
 }
 
-const cooldownStatus = await sadasend.arbiter.cooldowns.status(TEST_RECIPIENT);
+const cooldownStatus = await sadasend.arbiter.recipients.status(TEST_RECIPIENT);
 if (cooldownStatus.ok) {
   console.log(`Cooldown status: remaining = ${cooldownStatus.data.remainingSeconds}s`);
 }

@@ -225,6 +225,18 @@ beforeAll(async () => {
         });
       }
 
+      if (url.pathname === '/account/production-request' && method === 'GET') {
+        return Response.json({
+          status: 'pending',
+          requestedAt: '2026-11-20T12:00:00Z',
+          websiteUrl: 'https://acme.com',
+          category: 'transactional',
+          notes: 'SaaS onboarding receipts',
+          riskTier: 'standard',
+          domainRiskScore: 0,
+        });
+      }
+
       // 2. Domain Routes
       if (url.pathname === '/domains' && method === 'GET') {
         return Response.json({
@@ -501,6 +513,15 @@ beforeAll(async () => {
               priority: 'normal',
               createdAt: '2026-10-09T08:00:00Z',
             },
+          ],
+        });
+      }
+
+      if (url.pathname === '/support/mentions' && method === 'GET') {
+        return Response.json({
+          ok: true,
+          mentions: [
+            { tag: '@docs/api', label: 'API Reference', url: '/docs/api', description: 'Complete REST and SDK specification' },
           ],
         });
       }
@@ -1124,6 +1145,13 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
       expect(staff.data.accesses.length).toBe(1);
     }
 
+    const prodReq = await client.account.productionRequest();
+    expect(prodReq.ok).toBe(true);
+    if (prodReq.ok) {
+      expect(prodReq.data.status).toBe('pending');
+      expect(prodReq.data.riskTier).toBe('standard');
+    }
+
     // 2. Domains
     const doms = await client.domains.list();
     expect(doms.ok).toBe(true);
@@ -1294,6 +1322,13 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
     const ticketDetail = await client.support.ticket('tkt_123');
     expect(ticketDetail.ok).toBe(true);
 
+    const mentions = await client.support.mentions({ q: 'api' });
+    expect(mentions.ok).toBe(true);
+    if (mentions.ok) {
+      expect(mentions.data.mentions.length).toBeGreaterThan(0);
+      expect(mentions.data.mentions[0]!.tag).toBe('@docs/api');
+    }
+
     const team = await client.team.get();
     expect(team.ok).toBe(true);
     if (team.ok) {
@@ -1408,6 +1443,12 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
       expect(dmarcSummary.data.dkimAlignmentPct).toBeGreaterThan(99);
     }
 
+    const dmarcDomSummary = await client.dmarc.domains.summary('onboarding.sadasend.com');
+    expect(dmarcDomSummary.ok).toBe(true);
+    if (dmarcDomSummary.ok) {
+      expect(dmarcDomSummary.data.dkimAlignmentPct).toBeGreaterThan(99);
+    }
+
     const dmarcThreats = await client.dmarc.threats();
     expect(dmarcThreats.ok).toBe(true);
     if (dmarcThreats.ok) {
@@ -1431,6 +1472,15 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
 
     const cdStatus = await client.arbiter.cooldowns.status('lead@enterprise.com');
     expect(cdStatus.ok).toBe(true);
+
+    const recipStatus = await client.arbiter.recipients.status('lead@enterprise.com');
+    expect(recipStatus.ok).toBe(true);
+
+    const recipSet = await client.arbiter.recipients.set('lead@enterprise.com', 86400, 'Agent outreach alias');
+    expect(recipSet.ok).toBe(true);
+
+    const recipClear = await client.arbiter.recipients.clear('lead@enterprise.com');
+    expect(recipClear.ok).toBe(true);
 
     const cdClear = await client.arbiter.cooldowns.clear('lead@enterprise.com');
     expect(cdClear.ok).toBe(true);
@@ -1780,7 +1830,7 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
     }
 
     expect(exitCode).toBe(0);
-    expect(stdout).toContain('25 PASSED');
+    expect(stdout).toContain('28 PASSED');
     expect(stdout).toContain('0 FAILED');
     expect(stdout).toContain('All TypeScript SDK operations verified and 100% operational!');
     expect(stdout).not.toContain('FAIL:');

@@ -38,6 +38,8 @@ Unlike legacy email APIs that blindly dispatch emails or crash via exceptions, S
    Protect sender reputation by enabling real-time recipient verification at send time. Refused undeliverables debit 0 sending quota and return a typed `UndeliverableRecipientError` for proactive remediation.
 7. **First-Class React Email Support (`react` prop):**
    When sending dynamic JSX/TSX email templates, pass components directly to `react: <Component />`. The SDK compiles them to HTML and text automatically without bundling heavy peer dependencies.
+8. **Cross-Agent Quiet Periods & Collision Arbitration (`arbiter.recipients`):**
+   When orchestrating multiple autonomous agents, set or query recipient cooldowns (`await sadasend.arbiter.recipients.set(recipient, durationSeconds)`) to avoid collisions or double-contacting leads.
 
 ---
 

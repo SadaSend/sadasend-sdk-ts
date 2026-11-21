@@ -5,6 +5,19 @@ All notable changes to the `sadasend` TypeScript SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-11-21
+
+### Added
+- **Production Sending Access Status Query (`client.account.productionRequest`)**:
+  - Added `client.account.productionRequest()` to inspect real-time review status (`pending`, `approved`, `rejected`, `none`, risk tier, domain risk score).
+  - Exported type `AccountProductionRequest` from SDK root.
+- **Documentation Mentions Autocomplete Query (`client.support.mentions`)**:
+  - Added `client.support.mentions({ q })` query helper for doc tag autocompletion.
+  - Exported types `SupportMention` and `SupportMentionsResult` from SDK root.
+- **Nested Namespace Aliases (`client.arbiter.recipients`, `client.dmarc.domains`)**:
+  - Added `client.arbiter.recipients.status()`, `client.arbiter.recipients.set()`, `client.arbiter.recipients.clear()` aliasing `client.arbiter.cooldowns`.
+  - Added `client.dmarc.domains.summary()` aliasing `client.dmarc.summary()`.
+
 ## [0.1.4] - 2026-11-06
 
 ### Added

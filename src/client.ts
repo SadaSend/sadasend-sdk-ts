@@ -322,6 +322,16 @@ export type AccountChecklist = {
   total: number;
 };
 
+export type AccountProductionRequest = {
+  status: string;
+  requestedAt: string | null;
+  websiteUrl: string | null;
+  category: string | null;
+  notes: string | null;
+  riskTier: string | null;
+  domainRiskScore: number | null;
+};
+
 export type TemplateSummary = {
   id: string;
   name: string;
@@ -394,6 +404,18 @@ export type SupportTicketSummary = {
   status: string;
   priority: string;
   createdAt: string;
+};
+
+export type SupportMention = {
+  tag: string;
+  label: string;
+  url: string;
+  description?: string;
+};
+
+export type SupportMentionsResult = {
+  ok: boolean;
+  mentions: SupportMention[];
 };
 
 export type TeamMember = {
@@ -706,7 +728,7 @@ export type ClientOptions = {
   agentName?: string;
 };
 
-const VERSION = '0.1.4';
+const VERSION = '0.1.5';
 
 /**
  * `process.env`, read without assuming it exists.
@@ -975,6 +997,8 @@ export class SadaSend {
       this.#request<{ circuitBreakers: CircuitBreaker[] }>('GET', '/account/circuit-breakers'),
     staffAccess: (params: { limit?: number } = {}) =>
       this.#request<{ accesses: StaffAccess[]; note?: string }>('GET', `/account/staff-access${query(params)}`),
+    productionRequest: () =>
+      this.#request<AccountProductionRequest>('GET', '/account/production-request'),
   };
 
   readonly domains = {
@@ -1013,6 +1037,9 @@ export class SadaSend {
       this.#request<{ tickets: SupportTicketSummary[] }>('GET', `/support/tickets${query(params)}`),
     ticket: (id: string) =>
       this.#request<any>('GET', `/support/tickets/${encodeURIComponent(id)}`),
+    mentions: (params: { q?: string } = {}) =>
+      this.#request<SupportMentionsResult>(
+        'GET', `/support/mentions${query(params)}`),
   };
 
   readonly team = {
@@ -1073,6 +1100,10 @@ export class SadaSend {
     },
     summary: (domain: string) =>
       this.#request<DmarcDomainSummary>('GET', `/dmarc/domains/${encodeURIComponent(domain)}/summary`),
+    domains: {
+      summary: (domain: string) =>
+        this.#request<DmarcDomainSummary>('GET', `/dmarc/domains/${encodeURIComponent(domain)}/summary`),
+    },
     threats: () =>
       this.#request<{ ok: boolean; threats: DmarcThreat[] }>('GET', '/dmarc/threats'),
   };
@@ -1080,6 +1111,17 @@ export class SadaSend {
   readonly arbiter = {
     stats: () => this.#request<ArbiterStats>('GET', '/arbiter/stats'),
     cooldowns: {
+      set: (recipient: string, durationSeconds: number, reason?: string) =>
+        this.#request<CooldownResult>('POST', `/arbiter/recipients/${encodeURIComponent(recipient)}/cooldown`, {
+          body: { durationSeconds, reason },
+        }),
+      clear: (recipient: string) =>
+        this.#request<{ ok: boolean; recipient: string; cleared: boolean }>(
+          'DELETE', `/arbiter/recipients/${encodeURIComponent(recipient)}/cooldown`),
+      status: (recipient: string) =>
+        this.#request<CooldownStatus>('GET', `/arbiter/recipients/${encodeURIComponent(recipient)}/status`),
+    },
+    recipients: {
       set: (recipient: string, durationSeconds: number, reason?: string) =>
         this.#request<CooldownResult>('POST', `/arbiter/recipients/${encodeURIComponent(recipient)}/cooldown`, {
           body: { durationSeconds, reason },
