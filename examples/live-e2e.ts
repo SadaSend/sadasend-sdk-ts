@@ -307,6 +307,33 @@ await check('dmarc.domains.summary() & arbiter.recipients.status()', async () =>
   if (typeof aRes.data.cooldownActive !== 'boolean') throw new Error('Missing cooldownActive');
 });
 
+// 8. Audience Contacts & List Hygiene Engine
+await check('contacts.hygiene() & contacts.list()', async () => {
+  const hRes = await client.contacts.hygiene();
+  if (!hRes.ok) throw hRes.error;
+  if (typeof hRes.data.hygieneScore !== 'number') throw new Error('Missing hygieneScore');
+
+  const cRes = await client.contacts.list({ limit: 10 });
+  if (!cRes.ok) throw cRes.error;
+  if (!Array.isArray(cRes.data.contacts)) throw new Error('Missing contacts array');
+});
+
+await check('contacts.getSunsetPolicy()', async () => {
+  const pRes = await client.contacts.getSunsetPolicy();
+  if (!pRes.ok) throw pRes.error;
+  if (typeof pRes.data.policy.inactivityDays !== 'number') throw new Error('Missing inactivityDays in sunset policy');
+});
+
+await check('contacts.create() & contacts.runSunset()', async () => {
+  const cRes = await client.contacts.create({ email: 'live-test-contact@example.com', traits: { env: 'live-e2e' } });
+  if (!cRes.ok) throw cRes.error;
+  if (!cRes.data.contact.email) throw new Error('Missing contact email in response');
+
+  const sRes = await client.contacts.runSunset({ dryRun: true });
+  if (!sRes.ok) throw sRes.error;
+  if (typeof sRes.data.result.evaluated !== 'number') throw new Error('Missing evaluated count');
+});
+
 console.log(`\n------------------------------------------------------`);
 console.log(`Results: \x1b[32m${passed} PASSED\x1b[0m | \x1b[31m${failed} FAILED\x1b[0m out of ${passed + failed} checks`);
 console.log(`------------------------------------------------------\n`);

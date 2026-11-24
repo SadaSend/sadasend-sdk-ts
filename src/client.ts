@@ -710,6 +710,93 @@ export type SlackIntegrationStatus = {
   };
 };
 
+export type ContactStatus =
+  | 'active'
+  | 'at_risk'
+  | 'dormant'
+  | 'sunset'
+  | 'unsubscribed'
+  | 'bounced';
+
+export type Contact = {
+  id: string;
+  email: string;
+  status: ContactStatus;
+  sendCount: number;
+  openCount: number;
+  clickCount: number;
+  lastEmailedAt?: string;
+  lastOpenedAt?: string;
+  lastClickedAt?: string;
+  sunsetAt?: string;
+  sunsetReason?: string;
+  traits?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SunsetPolicy = {
+  enabled: boolean;
+  inactivityDays: number;
+  minSendsBeforeSunset: number;
+  warningDays: number;
+  action: 'suppress' | 'tag';
+  lastRunAt?: string;
+  lastSweepCount?: number;
+};
+
+export type HygieneScorecard = {
+  totalContacts: number;
+  activeContacts: number;
+  atRiskContacts: number;
+  dormantContacts: number;
+  sunsetContacts: number;
+  unsubscribedContacts: number;
+  bouncedContacts: number;
+  hygieneScore: number;
+  hygieneGrade: 'A' | 'B' | 'C' | 'D' | 'F';
+  cohorts: {
+    active30d: number;
+    engaged30To90d: number;
+    unengaged90To180d: number;
+    unengaged180PlusD: number;
+    neverEngaged: number;
+  };
+  policy?: SunsetPolicy;
+};
+
+export type ContactListParams = {
+  q?: string;
+  status?: ContactStatus;
+  page?: number;
+  limit?: number;
+  orderBy?: string;
+  order?: 'asc' | 'desc';
+};
+
+export type ContactCreateParams = {
+  email: string;
+  traits?: Record<string, unknown>;
+};
+
+export type SunsetPolicyUpdateParams = {
+  enabled?: boolean;
+  inactivityDays?: number;
+  minSendsBeforeSunset?: number;
+  warningDays?: number;
+  action?: 'suppress' | 'tag';
+};
+
+export type SunsetRunResult = {
+  accountId: string;
+  evaluated: number;
+  atRiskFlagged: number;
+  sunsetCount: number;
+  action: string;
+  dryRun: boolean;
+  sunsetEmails: string[];
+};
+
 export type Result<T> = { ok: true; data: T } | { ok: false; error: SadaSendError };
 
 export type ClientOptions = {
@@ -728,7 +815,7 @@ export type ClientOptions = {
   agentName?: string;
 };
 
-const VERSION = '0.1.5';
+const VERSION = '0.1.6';
 
 /**
  * `process.env`, read without assuming it exists.
@@ -1011,8 +1098,26 @@ export class SadaSend {
     list: (params: { q?: string; reason?: string; limit?: number } = {}) =>
       this.#request<{ suppressions: { address: string; reason: string; createdAt: string }[]; total: number }>(
         'GET', `/suppressions${query(params)}`),
-    add: (address: string, reason = 'manual') =>
+    add: (address: string, reason: 'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual' | 'sunset' | string = 'manual') =>
       this.#request<{ address: string; reason: string; already?: boolean }>('POST', '/suppressions', { body: { address, reason } }),
+  };
+
+  readonly contacts = {
+    list: (params: ContactListParams = {}) =>
+      this.#request<{ contacts: Contact[]; total: number; page: number; limit: number }>(
+        'GET', `/contacts${query(params)}`),
+    create: (params: ContactCreateParams) =>
+      this.#request<{ contact: Contact }>('POST', '/contacts', { body: params }),
+    hygiene: () =>
+      this.#request<HygieneScorecard>('GET', '/contacts/hygiene'),
+    getSunsetPolicy: () =>
+      this.#request<{ policy: SunsetPolicy }>('GET', '/contacts/sunset/policy'),
+    updateSunsetPolicy: (params: SunsetPolicyUpdateParams) =>
+      this.#request<{ policy: SunsetPolicy }>('PUT', '/contacts/sunset/policy', { body: params }),
+    runSunset: (options: { dryRun?: boolean } = {}) =>
+      this.#request<{ result: SunsetRunResult }>('POST', `/contacts/sunset/run${query(options)}`, { body: options }),
+    restoreSunset: (params: { id?: string; email?: string }) =>
+      this.#request<{ restored: boolean; contact: Contact }>('POST', '/contacts/sunset/restore', { body: params }),
   };
 
   readonly templates = {

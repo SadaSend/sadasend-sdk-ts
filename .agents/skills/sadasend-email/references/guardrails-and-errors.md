@@ -43,13 +43,14 @@ SadaSend is engineered to prevent autonomous AI agents from hallucinating, leaki
 
 - **HTTP Status:** `403 Forbidden`
 - **Error Code:** `recipient_suppressed`
-- **Why It Happens:** The recipient previously unsubscribed, registered a spam complaint, or hard-bounced.
+- **Why It Happens:** The recipient previously unsubscribed, registered a spam complaint, hard-bounced, or was automatically sunsetted due to prolonged inactivity under the account's audience hygiene sunset policy.
 - **Payload Properties:**
   - `error.recipient`: The blocked address.
-  - `error.reason`: `'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual'`
+  - `error.reason`: `'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual' | 'sunset'`
 - **Agent Self-Correction Strategy:**
-  1. Never retry. Retrying suppressed emails destroys domain reputation and violates CAN-SPAM / GDPR.
-  2. Mark the contact as inactive in your CRM, database, or agent state.
+  1. Never retry sending to suppressed or sunset addresses. Retrying destroys domain reputation.
+  2. If `error.reason === 'sunset'`, the contact was suppressed by list hygiene. If the user explicitly requested re-engagement, an operator can restore them via `client.contacts.restoreSunset({ email })`.
+  3. Mark the contact as inactive in your CRM, database, or agent state.
 
 ---
 

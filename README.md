@@ -131,7 +131,7 @@ console.log(result.status, result.id);
 
 *Note: The code above is an active integration test verified against a live server in CI via [`examples/ten-lines.ts`](./examples/ten-lines.ts).*
 
-For an executable walkthrough covering all 24 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
+For an executable walkthrough covering all 25 advanced features, inspect [`examples/full-features.ts`](./examples/full-features.ts).
 
 ---
 
@@ -349,8 +349,9 @@ if (preview.ok) {
 Manage suppression lists to prevent contacting hard-bounced or unsubscribed recipients:
 
 ```ts
-// Add manual suppression
+// Add manual suppression ('unsubscribe' | 'complaint' | 'hard_bounce' | 'manual' | 'sunset')
 await sadasend.suppressions.add('unsub@example.com', 'unsubscribe');
+await sadasend.suppressions.add('dormant@example.com', 'sunset');
 
 // Query suppression list
 const list = await sadasend.suppressions.list({ q: 'unsub@example.com' });
@@ -587,6 +588,45 @@ test('user can complete 2FA signup', async ({ page, ephemeralInbox }) => {
 - **Automatic Lifecycle Teardown**: Inboxes are automatically deleted immediately after each test finishes, guaranteeing zero leftover mailboxes and zero quota waste.
 - **`createInbox(options)`**: Factory to instantiate additional isolated inboxes for multi-user scenarios (e.g. inviting team members).
 - **Single Install**: Available directly from `sadasend/playwright` (`npm install sadasend`). Zero extra companion packages to install or manage.
+
+### 17. Audience Contacts & List Hygiene Engine (`contacts`)
+
+Maintain high sender reputation with built-in engagement scoring, cohort telemetry, and automated inactive contact sunset policies:
+
+```ts
+// 1. Inspect audience list hygiene scorecard
+const hygiene = await sadasend.contacts.hygiene();
+if (hygiene.ok) {
+  console.log(`Hygiene Score: ${hygiene.data.hygieneScore}/100 (Grade: ${hygiene.data.hygieneGrade})`);
+  console.log(`Active (<30d): ${hygiene.data.cohorts.active30d} | At-Risk: ${hygiene.data.atRiskContacts} | Sunset: ${hygiene.data.sunsetContacts}`);
+}
+
+// 2. Query at-risk or dormant audience members
+const atRisk = await sadasend.contacts.list({ status: 'at_risk', limit: 25 });
+if (atRisk.ok) {
+  for (const contact of atRisk.data.contacts) {
+    console.log(`${contact.email}: ${contact.openCount} opens, last clicked: ${contact.lastClickedAt ?? 'never'}`);
+  }
+}
+
+// 3. Configure automated contact sunset policy
+await sadasend.contacts.updateSunsetPolicy({
+  enabled: true,
+  inactivityDays: 90,
+  minSendsBeforeSunset: 3,
+  warningDays: 14,
+  action: 'suppress', // Automatically suppress dormant recipients to preserve domain deliverability
+});
+
+// 4. Run sunset evaluation sweep (dry run preview)
+const sweep = await sadasend.contacts.runSunset({ dryRun: true });
+if (sweep.ok) {
+  console.log(`Evaluated: ${sweep.data.result.evaluated}, Sunset candidates: ${sweep.data.result.sunsetCount}`);
+}
+
+// 5. Restore a previously sunsetted contact to active standing
+await sadasend.contacts.restoreSunset({ email: 'returning-user@example.com' });
+```
 
 ---
 

@@ -26,6 +26,7 @@
  * 22. Multi-agent collision arbiter & cooldowns (`arbiter.cooldowns`, `arbiter.recipients`)
  * 23. Ephemeral inboxes & reactive SSE stream (`inboxes.create`, `inboxes.streamUrl`, `inboxes.otp`)
  * 24. E2E sandbox testing & OTP code assertions (`testing.inbound`, `testing.waitForCode`)
+ * 25. Audience contacts & list hygiene engine (`contacts.hygiene`, `contacts.list`, `contacts.runSunset`)
  *
  * Run this example:
  *   SADASEND_API_KEY="sada_live_sk_..." bun run examples/full-features.ts
@@ -380,6 +381,12 @@ if (addSuppression.ok) {
   console.log(`Suppressed address: ${addSuppression.data.address} (already suppressed = ${addSuppression.data.already ?? false})`);
 }
 
+const sunsetAddr = `sunset-dormant-${Date.now()}@example.com`;
+const addSunsetSuppression = await sadasend.suppressions.add(sunsetAddr, 'sunset');
+if (addSunsetSuppression.ok) {
+  console.log(`Suppressed dormant address under sunset policy: ${addSunsetSuppression.data.address} (reason: ${addSunsetSuppression.data.reason})`);
+}
+
 const listSuppressions = await sadasend.suppressions.list({ limit: 5 });
 if (listSuppressions.ok) {
   console.log(`Total suppressions on account: ${listSuppressions.data.total}`);
@@ -565,6 +572,39 @@ const testCode = await sadasend.testing.waitForCode({
 });
 if (testCode.ok) {
   console.log(`Verified test OTP code: ${testCode.data.code} (alias otp: ${testCode.data.otp})`);
+}
+
+// ---------------------------------------------------------------------------
+// 25. Audience Contacts & List Hygiene Engine
+// ---------------------------------------------------------------------------
+console.log('\n--- 25. Audience Contacts & List Hygiene Engine ---');
+const listHygiene = await sadasend.contacts.hygiene();
+if (listHygiene.ok) {
+  console.log(`Audience List Hygiene: Score ${listHygiene.data.hygieneScore}/100 (Grade: ${listHygiene.data.hygieneGrade})`);
+  console.log(`Active (<30d): ${listHygiene.data.cohorts.active30d} | At-Risk: ${listHygiene.data.atRiskContacts} | Sunset: ${listHygiene.data.sunsetContacts}`);
+}
+
+const atRiskContacts = await sadasend.contacts.list({ status: 'at_risk', limit: 5 });
+if (atRiskContacts.ok) {
+  console.log(`Queried at-risk contacts count: ${atRiskContacts.data.contacts.length}`);
+}
+
+const newContact = await sadasend.contacts.create({
+  email: 'customer-lead@example.com',
+  traits: { tier: 'pro', source: 'walkthrough' },
+});
+if (newContact.ok) {
+  console.log(`Ingested audience contact: ${newContact.data.contact.email} (Status: ${newContact.data.contact.status})`);
+}
+
+const sunsetPolicy = await sadasend.contacts.getSunsetPolicy();
+if (sunsetPolicy.ok) {
+  console.log(`Sunset policy: ${sunsetPolicy.data.policy.inactivityDays}d inactivity, action: ${sunsetPolicy.data.policy.action}`);
+}
+
+const sunsetSweep = await sadasend.contacts.runSunset({ dryRun: true });
+if (sunsetSweep.ok) {
+  console.log(`Sunset evaluation sweep (dry run): evaluated ${sunsetSweep.data.result.evaluated}, flagged ${sunsetSweep.data.result.sunsetCount} inactive`);
 }
 
 console.log('\n=== SadaSend TypeScript SDK Demo Completed Successfully ===\n');

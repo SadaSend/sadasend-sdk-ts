@@ -5,6 +5,21 @@ All notable changes to the `sadasend` TypeScript SDK will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2026-11-24
+
+### Added
+- **Audience Contacts & List Hygiene Engine (`client.contacts`)**:
+  - `client.contacts.list({ q, status, page, limit, orderBy, order })`: Lists contacts with engagement telemetry, sort, and status filtering (`active`, `at_risk`, `dormant`, `sunset`, `unsubscribed`, `bounced`).
+  - `client.contacts.create({ email, traits })`: Creates or upserts a contact with custom traits.
+  - `client.contacts.hygiene()`: Returns audience list hygiene health score (0–100), health grade (A–F), and engagement cohorts (active <30d, engaged 30–90d, unengaged 90–180d, unengaged 180+d, never engaged).
+  - `client.contacts.getSunsetPolicy()`: Retrieves inactive contact sunset policy.
+  - `client.contacts.updateSunsetPolicy({ enabled, inactivityDays, minSendsBeforeSunset, warningDays, action })`: Updates sunset policy thresholds.
+  - `client.contacts.runSunset({ dryRun })`: Triggers a sunset evaluation sweep with optional dry-run preview.
+  - `client.contacts.restoreSunset({ id, email })`: Restores a sunsetted contact to active standing.
+  - Exported types `Contact`, `ContactStatus`, `ContactListParams`, `ContactCreateParams`, `SunsetPolicy`, `SunsetPolicyUpdateParams`, `HygieneScorecard`, and `SunsetRunResult`.
+- **Suppression List `'sunset'` Reason Support**:
+  - Added `'sunset'` to `RecipientSuppressedError.reason` and `client.suppressions.add(address, reason)`.
+
 ## [0.1.5] - 2026-11-21
 
 ### Added

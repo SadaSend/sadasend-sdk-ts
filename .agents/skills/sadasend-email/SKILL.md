@@ -40,6 +40,8 @@ Unlike legacy email APIs that blindly dispatch emails or crash via exceptions, S
    When sending dynamic JSX/TSX email templates, pass components directly to `react: <Component />`. The SDK compiles them to HTML and text automatically without bundling heavy peer dependencies.
 8. **Cross-Agent Quiet Periods & Collision Arbitration (`arbiter.recipients`):**
    When orchestrating multiple autonomous agents, set or query recipient cooldowns (`await sadasend.arbiter.recipients.set(recipient, durationSeconds)`) to avoid collisions or double-contacting leads.
+9. **Maintain Audience List Hygiene Before Bulk Sends (`contacts.hygiene`):**
+   Before initiating outbound campaigns, verify the audience list health scorecard (`await sadasend.contacts.hygiene()`). If the hygiene grade is low or contacts are flagged `at_risk`/`dormant`, run a sunset dry-run (`await sadasend.contacts.runSunset({ dryRun: true })`) to avoid delivering to dormant mailboxes and damaging domain reputation.
 
 ---
 

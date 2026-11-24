@@ -92,7 +92,7 @@ export class RecipientSuppressedError extends SadaSendError {
     return typeof this.body.recipient === 'string' ? this.body.recipient : undefined;
   }
 
-  get reason(): 'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual' | undefined {
+  get reason(): 'hard_bounce' | 'complaint' | 'unsubscribe' | 'manual' | 'sunset' | undefined {
     return this.body.reason as never;
   }
 }

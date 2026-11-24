@@ -461,6 +461,125 @@ beforeAll(async () => {
         });
       }
 
+      // 5b. Contacts & Audience List Hygiene Routes
+      if (url.pathname === '/contacts' && method === 'GET') {
+        const status = url.searchParams.get('status') || 'active';
+        return Response.json({
+          contacts: [
+            {
+              id: 'cnt_123',
+              email: 'contact@example.com',
+              status,
+              sendCount: 12,
+              openCount: 6,
+              clickCount: 2,
+              lastEmailedAt: '2026-11-20T10:00:00Z',
+              lastOpenedAt: '2026-11-20T11:00:00Z',
+              createdAt: '2026-09-01T00:00:00Z',
+              updatedAt: '2026-11-20T11:00:00Z',
+            },
+          ],
+          total: 1,
+          page: 1,
+          limit: 50,
+        });
+      }
+
+      if (url.pathname === '/contacts' && method === 'POST') {
+        const body = await req.json();
+        return Response.json({
+          contact: {
+            id: 'cnt_new_456',
+            email: body.email,
+            status: 'active',
+            sendCount: 0,
+            openCount: 0,
+            clickCount: 0,
+            traits: body.traits,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }, { status: 201 });
+      }
+
+      if (url.pathname === '/contacts/hygiene' && method === 'GET') {
+        return Response.json({
+          totalContacts: 1500,
+          activeContacts: 1250,
+          atRiskContacts: 150,
+          dormantContacts: 60,
+          sunsetContacts: 30,
+          unsubscribedContacts: 8,
+          bouncedContacts: 2,
+          hygieneScore: 94,
+          hygieneGrade: 'A',
+          cohorts: {
+            active30d: 1100,
+            engaged30To90d: 150,
+            unengaged90To180d: 60,
+            unengaged180PlusD: 30,
+            neverEngaged: 10,
+          },
+        });
+      }
+
+      if (url.pathname === '/contacts/sunset/policy' && method === 'GET') {
+        return Response.json({
+          policy: {
+            enabled: true,
+            inactivityDays: 90,
+            minSendsBeforeSunset: 3,
+            warningDays: 14,
+            action: 'suppress',
+          },
+        });
+      }
+
+      if (url.pathname === '/contacts/sunset/policy' && method === 'PUT') {
+        const body = await req.json();
+        return Response.json({
+          policy: {
+            enabled: body.enabled ?? true,
+            inactivityDays: body.inactivityDays ?? 90,
+            minSendsBeforeSunset: 3,
+            warningDays: 14,
+            action: body.action ?? 'suppress',
+          },
+        });
+      }
+
+      if (url.pathname.startsWith('/contacts/sunset/run') && method === 'POST') {
+        const isDryRun = url.searchParams.get('dryRun') === 'true';
+        return Response.json({
+          result: {
+            accountId: 'acc_e2e_1',
+            evaluated: 1500,
+            atRiskFlagged: 150,
+            sunsetCount: 30,
+            action: 'suppress',
+            dryRun: isDryRun,
+            sunsetEmails: ['dormant@example.com'],
+          },
+        });
+      }
+
+      if (url.pathname === '/contacts/sunset/restore' && method === 'POST') {
+        const body = await req.json();
+        return Response.json({
+          restored: true,
+          contact: {
+            id: body.id ?? 'cnt_restored',
+            email: body.email ?? 'dormant@example.com',
+            status: 'active',
+            sendCount: 5,
+            openCount: 1,
+            clickCount: 0,
+            createdAt: '2026-09-01T00:00:00Z',
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      }
+
       // 6. Keys & Approvals
       if (url.pathname === '/keys' && method === 'GET') {
         return Response.json({
@@ -1298,6 +1417,53 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
       expect(listSup.data.suppressions.some((s) => s.address === testAddr)).toBe(true);
     }
 
+    // 5b. Audience Contacts & List Hygiene Engine
+    const contactList = await client.contacts.list({ status: 'active', limit: 20 });
+    expect(contactList.ok).toBe(true);
+    if (contactList.ok) {
+      expect(contactList.data.contacts.length).toBeGreaterThan(0);
+      expect(contactList.data.contacts[0]!.status).toBe('active');
+    }
+
+    const contactCreate = await client.contacts.create({ email: 'new-lead@example.com', traits: { org: 'Acme' } });
+    expect(contactCreate.ok).toBe(true);
+    if (contactCreate.ok) {
+      expect(contactCreate.data.contact.email).toBe('new-lead@example.com');
+    }
+
+    const hygiene = await client.contacts.hygiene();
+    expect(hygiene.ok).toBe(true);
+    if (hygiene.ok) {
+      expect(hygiene.data.hygieneScore).toBe(94);
+      expect(hygiene.data.hygieneGrade).toBe('A');
+    }
+
+    const sunsetPolicy = await client.contacts.getSunsetPolicy();
+    expect(sunsetPolicy.ok).toBe(true);
+    if (sunsetPolicy.ok) {
+      expect(sunsetPolicy.data.policy.enabled).toBe(true);
+      expect(sunsetPolicy.data.policy.inactivityDays).toBe(90);
+    }
+
+    const updatePolicy = await client.contacts.updateSunsetPolicy({ enabled: true, inactivityDays: 120 });
+    expect(updatePolicy.ok).toBe(true);
+    if (updatePolicy.ok) {
+      expect(updatePolicy.data.policy.inactivityDays).toBe(120);
+    }
+
+    const sunsetRun = await client.contacts.runSunset({ dryRun: true });
+    expect(sunsetRun.ok).toBe(true);
+    if (sunsetRun.ok) {
+      expect(sunsetRun.data.result.dryRun).toBe(true);
+      expect(sunsetRun.data.result.sunsetCount).toBe(30);
+    }
+
+    const restoreSunset = await client.contacts.restoreSunset({ email: 'dormant@example.com' });
+    expect(restoreSunset.ok).toBe(true);
+    if (restoreSunset.ok) {
+      expect(restoreSunset.data.restored).toBe(true);
+    }
+
     // 6. Keys & Governance
     const keys = await client.keys.list();
     expect(keys.ok).toBe(true);
@@ -1830,7 +1996,7 @@ describe('End-to-End Suite: Real Network Wire Tests', () => {
     }
 
     expect(exitCode).toBe(0);
-    expect(stdout).toContain('28 PASSED');
+    expect(stdout).toContain('31 PASSED');
     expect(stdout).toContain('0 FAILED');
     expect(stdout).toContain('All TypeScript SDK operations verified and 100% operational!');
     expect(stdout).not.toContain('FAIL:');

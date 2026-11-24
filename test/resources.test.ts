@@ -581,4 +581,64 @@ describe("Full Resource API Surface Coverage", () => {
 
     expect(calls.length).toBe(5);
   });
+
+  test("contacts & list hygiene: list, create, hygiene, getSunsetPolicy, updateSunsetPolicy, runSunset, restoreSunset", async () => {
+    const { sdk, calls } = createMockClient((url, method, body) => {
+      if (url.includes("/contacts?") && method === "GET") {
+        return { status: 200, body: { contacts: [{ id: "c_1", email: "user@example.com", status: "active", sendCount: 5, openCount: 2, clickCount: 1 }], total: 1, page: 1, limit: 50 } };
+      }
+      if (url.endsWith("/contacts") && method === "POST") {
+        return { status: 201, body: { contact: { id: "c_new", email: body.email, status: "active", sendCount: 0, openCount: 0, clickCount: 0 } } };
+      }
+      if (url.endsWith("/contacts/hygiene") && method === "GET") {
+        return { status: 200, body: { totalContacts: 100, activeContacts: 80, atRiskContacts: 10, dormantContacts: 5, sunsetContacts: 3, unsubscribedContacts: 1, bouncedContacts: 1, hygieneScore: 92, hygieneGrade: "A", cohorts: { active30d: 70, engaged30To90d: 10, unengaged90To180d: 5, unengaged180PlusD: 3, neverEngaged: 2 } } };
+      }
+      if (url.endsWith("/contacts/sunset/policy") && method === "GET") {
+        return { status: 200, body: { policy: { enabled: true, inactivityDays: 90, minSendsBeforeSunset: 3, warningDays: 14, action: "suppress" } } };
+      }
+      if (url.endsWith("/contacts/sunset/policy") && method === "PUT") {
+        return { status: 200, body: { policy: { enabled: body.enabled, inactivityDays: body.inactivityDays, minSendsBeforeSunset: 3, warningDays: 14, action: "suppress" } } };
+      }
+      if (url.includes("/contacts/sunset/run") && method === "POST") {
+        return { status: 200, body: { result: { accountId: "acc_1", evaluated: 50, atRiskFlagged: 5, sunsetCount: 2, action: "suppress", dryRun: true, sunsetEmails: ["old@example.com"] } } };
+      }
+      if (url.endsWith("/contacts/sunset/restore") && method === "POST") {
+        return { status: 200, body: { restored: true, contact: { id: body.id, email: "user@example.com", status: "active" } } };
+      }
+      return { status: 404, body: { error: "not_found" } };
+    });
+
+    const listRes = await sdk.contacts.list({ status: "active", limit: 50 });
+    expect(listRes.ok).toBe(true);
+    if (listRes.ok) expect(listRes.data.contacts.length).toBe(1);
+
+    const createRes = await sdk.contacts.create({ email: "lead@example.com", traits: { plan: "enterprise" } });
+    expect(createRes.ok).toBe(true);
+    if (createRes.ok) expect(createRes.data.contact.email).toBe("lead@example.com");
+
+    const hygieneRes = await sdk.contacts.hygiene();
+    expect(hygieneRes.ok).toBe(true);
+    if (hygieneRes.ok) {
+      expect(hygieneRes.data.hygieneScore).toBe(92);
+      expect(hygieneRes.data.hygieneGrade).toBe("A");
+    }
+
+    const policyRes = await sdk.contacts.getSunsetPolicy();
+    expect(policyRes.ok).toBe(true);
+    if (policyRes.ok) expect(policyRes.data.policy.inactivityDays).toBe(90);
+
+    const updatePolicyRes = await sdk.contacts.updateSunsetPolicy({ enabled: true, inactivityDays: 120 });
+    expect(updatePolicyRes.ok).toBe(true);
+    if (updatePolicyRes.ok) expect(updatePolicyRes.data.policy.inactivityDays).toBe(120);
+
+    const runRes = await sdk.contacts.runSunset({ dryRun: true });
+    expect(runRes.ok).toBe(true);
+    if (runRes.ok) expect(runRes.data.result.sunsetCount).toBe(2);
+
+    const restoreRes = await sdk.contacts.restoreSunset({ id: "c_sunset_1" });
+    expect(restoreRes.ok).toBe(true);
+    if (restoreRes.ok) expect(restoreRes.data.restored).toBe(true);
+
+    expect(calls.length).toBe(7);
+  });
 });

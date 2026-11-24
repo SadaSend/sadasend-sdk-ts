@@ -21,6 +21,8 @@ export type {
   ArbiterStats, CooldownResult, CooldownStatus, EphemeralInbox, EphemeralInboxCreateInput,
   InboxOtpResult, InboxMessage, TestingInboundInput, WaitForCodeInput, WaitForCodeResult,
   SlackIntegrationStatus,
+  Contact, ContactStatus, ContactListParams, ContactCreateParams,
+  SunsetPolicy, SunsetPolicyUpdateParams, HygieneScorecard, SunsetRunResult,
   InboxStreamConnectedEvent, InboxStreamOtpEvent, InboxStreamMessageEvent,
   InboxStreamHeartbeatEvent, InboxStreamEvent, InboxStreamResponse,
   ReactEmailElement, RenderedEmail, ReactEmailRenderOptions,

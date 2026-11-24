@@ -128,7 +128,7 @@ const testSend = await sadasend.templates.test('tmpl_123', { to: 'qa@company.com
 ```ts
 // Add email to suppression list
 const added = await sadasend.suppressions.add('unsub@example.com', 'unsubscribe');
-// reasons: 'unsubscribe' | 'complaint' | 'hard_bounce' | 'manual'
+// reasons: 'unsubscribe' | 'complaint' | 'hard_bounce' | 'manual' | 'sunset'
 
 // Search suppressions
 const found = await sadasend.suppressions.list({ q: 'unsub@example.com' });
@@ -322,4 +322,32 @@ test('completes 2FA signup flow without polling', async ({ page, ephemeralInbox 
   await expect(page.locator('#dashboard')).toBeVisible();
 });
 // Ephemeral inboxes are automatically destroyed during test teardown
+```
+
+---
+
+## 16. Audience Contacts & List Hygiene Engine (`contacts`)
+
+```ts
+// List contacts with status filter & pagination
+const contacts = await sadasend.contacts.list({ status: 'active', limit: 50 });
+// contacts.data: { contacts: [{ id, email, status, sendCount, openCount, clickCount, traits }], total, page, limit }
+
+// Create or upsert contact with custom traits
+const created = await sadasend.contacts.create({ email: 'lead@corp.com', traits: { tier: 'pro' } });
+
+// Query list hygiene score & engagement cohorts
+const hygiene = await sadasend.contacts.hygiene();
+// hygiene.data: { hygieneScore, hygieneGrade, totalContacts, activeContacts, atRiskContacts, cohorts }
+
+// Retrieve & update sunset policy
+const policy = await sadasend.contacts.getSunsetPolicy();
+await sadasend.contacts.updateSunsetPolicy({ enabled: true, inactivityDays: 90, action: 'suppress' });
+
+// Run sunset evaluation sweep (preview with dryRun: true)
+const sweep = await sadasend.contacts.runSunset({ dryRun: true });
+// sweep.data: { result: { evaluated, atRiskFlagged, sunsetCount, sunsetEmails } }
+
+// Restore sunsetted contact
+await sadasend.contacts.restoreSunset({ email: 'user@example.com' });
 ```
